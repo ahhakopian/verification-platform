@@ -4,7 +4,7 @@
     {
       "schemaVersion": 1,
       "id": "generic:chrome",
-      "version": "unpublished-development",
+      "version": "v0.1.0",
       "entry": "dist/runtime/index.js",
       "declarations": "dist/runtime/index.d.ts",
       "capabilities": [
@@ -288,7 +288,7 @@
     {
       "schemaVersion": 1,
       "id": "generic:web",
-      "version": "unpublished-development",
+      "version": "v0.1.0",
       "entry": "dist/runtime/index.js",
       "declarations": "dist/runtime/index.d.ts",
       "capabilities": [
@@ -349,7 +349,7 @@
     {
       "schemaVersion": 1,
       "id": "generic:native",
-      "version": "unpublished-development",
+      "version": "v0.1.0",
       "entry": "dist/runtime/index.js",
       "declarations": "dist/runtime/index.d.ts",
       "capabilities": [
@@ -394,7 +394,7 @@
     {
       "schemaVersion": 1,
       "id": "generic:host",
-      "version": "unpublished-development",
+      "version": "v0.1.0",
       "entry": "dist/runtime/index.js",
       "declarations": "dist/runtime/index.d.ts",
       "capabilities": [
