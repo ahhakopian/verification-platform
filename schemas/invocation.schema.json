@@ -1,0 +1,298 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "planPath": {
+      "type": "string",
+      "minLength": 1
+    },
+    "planDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "repository": {
+          "type": "string",
+          "pattern": "^https://github\\.com/[^/]+/[^/]+$"
+        },
+        "tag": {
+          "type": "string",
+          "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "sourceCommit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "index": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "asset": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "asset",
+            "sha256"
+          ]
+        },
+        "resources": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "integration": {
+              "type": "string",
+              "minLength": 1
+            },
+            "planSchema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "descriptors": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "integration",
+            "planSchema",
+            "descriptors"
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "repository",
+        "tag",
+        "sourceCommit",
+        "index",
+        "resources"
+      ]
+    },
+    "assignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "planDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "bindingDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "authorization": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "reference": {
+              "type": "string",
+              "minLength": 1
+            },
+            "planDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "bindingDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "allowedEffects": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 0,
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "reference",
+            "planDigest",
+            "bindingDigest",
+            "allowedEffects"
+          ]
+        },
+        "environments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "build": {
+                "type": "string",
+                "minLength": 1
+              },
+              "runtimeConfig": {
+                "type": "string",
+                "minLength": 1
+              },
+              "powershell": {
+                "type": "string",
+                "minLength": 1
+              },
+              "launch": {
+                "type": "boolean"
+              },
+              "selection": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "pageUrl": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "pageUrl"
+                ]
+              },
+              "exclusive": {
+                "const": true
+              }
+            },
+            "required": [
+              "id",
+              "build",
+              "runtimeConfig",
+              "powershell",
+              "launch",
+              "selection",
+              "exclusive"
+            ]
+          },
+          "minItems": 1
+        },
+        "fixtureEntry": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runnerConfig": {
+          "type": "string",
+          "minLength": 1
+        },
+        "providers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "version": {
+                "type": "string",
+                "minLength": 1
+              },
+              "entry": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "id",
+              "version",
+              "entry"
+            ]
+          },
+          "minItems": 0
+        },
+        "outputDirectory": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ownership": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "borrowed": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 0,
+              "uniqueItems": true
+            },
+            "disposable": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 0,
+              "uniqueItems": true
+            },
+            "cleanup": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 0,
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "borrowed",
+            "disposable",
+            "cleanup"
+          ]
+        },
+        "evidenceConstraints": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "planDigest",
+        "bindingDigest",
+        "authorization",
+        "environments",
+        "fixtureEntry",
+        "runnerConfig",
+        "providers",
+        "outputDirectory",
+        "ownership",
+        "evidenceConstraints"
+      ]
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "planPath",
+    "planDigest",
+    "binding",
+    "assignment"
+  ]
+}

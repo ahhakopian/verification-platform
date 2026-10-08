@@ -1,0 +1,35 @@
+# Slice 4 bounded capability evidence
+
+Attempt `slice4-live-20261008` used the assigned caller-owned Windows Chrome instance. The canonical helper freshly validated its executable, profile, listener and process incarnation, then supplied the owned WSL relay. Those runtime identities are observed evidence, never runtime defaults. An existing caller-owned page target was borrowed and unchanged. No completed Slice 1–3 execution was repeated.
+
+The detailed local observation record contains browser target/session identifiers and is excluded from this public source repository. This document retains the bounded capability findings. The empirical driver used ordinary pinned Playwright and canonical typed runtime exports, with only an owned temporary fixture page, Blob worker and bounded HTTP fixture. No product provider, diagnostic extension, permission mutation, coordinate clicking or automatic retry was used.
+
+## Target lifecycle
+
+`observeTargets` acknowledged subscription/discovery readiness before owned fixture creation. Actual owned page/worker creation and target changes after that ready boundary were recorded. `Target.setDiscoverTargets` also emits `Target.targetCreated` callbacks for existing targets during subscription; those pre-readiness callbacks are a baseline, not evidence of new lifecycle creation (including the already-open Gemini page). A separate ready observer captured both exact owned target destructions during required `Worker.terminate()`/page-close cleanup, with no loss. That cleanup is not evidence that generic `Target.closeTarget` stops a worker. Finite boundaries and ready timestamps are retained; overflow/session loss invalidate completeness. The readiness implementation now rejects a CDP source lost during discovery, instead of returning false readiness. Discovery/debugger attachments can perturb target lifetime; the original worker was already attached by Playwright. Natural idle suspension is unestablished.
+
+## Worker interruption
+
+An exact dedicated worker was selected after readiness. Its one `Target.closeTarget` call rejected with `Specified target doesn't support closing`. No stop destruction, wake or replacement-session acquisition was established; the typed control never performed its separately supplied wake after rejection. Support for interruption is therefore **unavailable** for this assigned dedicated-worker source. The owned cleanup termination did not replace the rejected control with a fallback. No assigned service worker existed for a supported service-worker stop/wake check; no registration or extension installation was added. Nonflattened CDP target attachment in the typed implementation remains unestablished in this environment and is not a network transport promise.
+
+## Network
+
+The established source is one explicitly owned page CDP session, with its top-frame request fields. Its subscription was ready before `/probe-body` was fetched. A `200` response, full body `slice4-response`, and matching `Network.loadingFinished` supplied the finite completion boundary for request `24044.5`; the stream finished without loss. Actual `requestId`, `frameId`, `loaderId`, `documentURL`, initiator stack and raw response/completion fields are preserved. Source/session/request form the observation key. The session key is an explicitly declared `provider.session` lifetime identity, not an invented CDP session ID.
+
+Separate frame, dedicated/shared/service-worker, extension-request and worker-change coverage remain **unestablished**. No authoritative extension observer or permission source for `webRequest` was supplied. URL matching cannot establish extension attribution. No request absence proof was attempted or advertised. An earlier header-only fetch observation is retained as weaker evidence, not substituted for the body-completed check. The implementation rejects loss during `Network.enable`, detects CDP close plus caller lifetime loss/overflow, and preserves finite readiness/end boundaries. `Network.enable` stays active on the borrowed session until its caller disposes that owned source session; owned listeners are removed at finish.
+
+## Permission
+
+The read-only `navigator.permissions.query({name:'notifications'})` source returned `denied` at the owned insecure HTTP origin. The typed adapter checks the exact current origin within the real execution context. This establishes only that supported snapshot/name/origin combination; it does not establish prompt display, Invoke/Expand, permission-change events, extension permissions or other names/origins. No grant/deny was performed.
+
+## Native menu
+
+The caller authorized focus of the exact disposable owned fixture element and one Shift+F10 stimulus. Canonical `windows`/`tree` inspection and desktop-root traversal attributed to the exact runtime process/children exposed a Window root and no Menu/MenuItem. The assigned stimulus therefore supplied no eligible exact semantic menu selection or usable live Invoke/Expand pattern. The live eligible-menu check is **INCONCLUSIVE** and semantic menu support remains **unestablished** for the assigned stimulus/environment; affected claims cannot proceed. This does not assert that all Chrome menus or global UIA are unsupported. The canonical Window-root helper was not extended; no observed Menu root justified it. Native inspection succeeded, but the broader `native:semantic` Invoke/Expand capability stays unestablished. No native prompt/action was attempted.
+
+## Native cancellation
+
+The canonical Node `nativeOperation` performed one read-only `windows` invocation. An independent owned Windows inspector identified the exact invocation and its unique run configuration. Cancellation occurred only after that in-flight process was observed. The adapter returned `category=timeout`, `attempted=false`, `uncertain=false`; a fresh exact process query returned absent. The persistent caller-owned browser was never a cancellation target. Live cancellation after an effectful Invoke/Expand remains unestablished because no supported eligible action was present. Focused deterministic tests prove conservative `attempted=true`, `uncertain=true` after a possibly effectful canceled invocation and exactly one attempt; cancellation never authorizes repetition.
+
+## Deterministic checks and disposition
+
+Build/typecheck and eight focused file suites passed: catalog, compilation, execution-resource consistency, observers, worker/permission, host boundaries, owned-process cancellation, and the ordinary synthetic runner. The observer/worker/permission suites contain 13 focused cases; host/process suites contain seven. Focused source/mock tests cover exact worker selection, one stop, destruction-before-wake, rejected/missing stop destruction, cleanup, exact-origin permission guards, readiness loss races, finite scope/session identity, overflow, and owned native deadline/cancellation uncertainty. Compiler/catalog/type/resource checks preserve ordinary generic verification without promoting the unavailable optional sources. No optional visual or product-private callback/sender work was required.

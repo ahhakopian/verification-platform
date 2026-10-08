@@ -1,0 +1,436 @@
+{
+  "schemaVersion": 1,
+  "providers": [
+    {
+      "schemaVersion": 1,
+      "id": "generic:chrome",
+      "version": "unpublished-development",
+      "entry": "dist/runtime/index.js",
+      "declarations": "dist/runtime/index.d.ts",
+      "capabilities": [
+        {
+          "id": "chrome:version",
+          "contractVersion": "1",
+          "export": "browserCDP",
+          "inputType": "Browser",
+          "outputType": "Promise<CDPSession>",
+          "support": "unestablished",
+          "constraints": [
+            "wsl-windows",
+            "explicit caller-owned assignment"
+          ],
+          "observations": [
+            "Temporary browser CDP session for ordinary Browser.getVersion"
+          ],
+          "limits": [
+            "Protocol response proves browser metadata only",
+            "Current deployed support remains unestablished; mocks/types are not live evidence"
+          ],
+          "effects": [],
+          "ownership": "Owned temporary CDP session; borrowed browser",
+          "prerequisites": [
+            "assigned-current-runtime"
+          ],
+          "deadlineMs": 10000,
+          "evidenceRefs": []
+        },
+        {
+          "id": "chrome:targets",
+          "contractVersion": "1",
+          "export": "discoverTargets",
+          "inputType": "CDPSession, TargetFilter[]",
+          "outputType": "Promise<Target[]>",
+          "support": "unestablished",
+          "constraints": [
+            "wsl-windows",
+            "explicit caller-owned assignment"
+          ],
+          "observations": [
+            "Fresh explicitly filtered Target.getTargets response"
+          ],
+          "limits": [
+            "Snapshot does not prove an absence interval",
+            "Current deployed support remains unestablished; mocks/types are not live evidence"
+          ],
+          "effects": [],
+          "ownership": "Borrowed session; immutable observation",
+          "prerequisites": [
+            "explicit nonempty target filter"
+          ],
+          "deadlineMs": 10000,
+          "evidenceRefs": []
+        },
+        {
+          "id": "chrome:target-selection",
+          "contractVersion": "1",
+          "export": "selectTarget",
+          "inputType": "Target[], Partial<Target>",
+          "outputType": "Target",
+          "support": "unestablished",
+          "constraints": [
+            "wsl-windows",
+            "explicit caller-owned assignment"
+          ],
+          "observations": [
+            "Exact unique target selection"
+          ],
+          "limits": [
+            "No page/tab/extension namespace conversion",
+            "Current deployed support remains unestablished; mocks/types are not live evidence"
+          ],
+          "effects": [],
+          "ownership": "Snapshot selection only",
+          "prerequisites": [
+            "fresh source target snapshot"
+          ],
+          "deadlineMs": 10000,
+          "evidenceRefs": []
+        },
+        {
+          "id": "chrome:extension-discovery",
+          "contractVersion": "1",
+          "export": "discoverExtension",
+          "inputType": "CDPSession, string",
+          "outputType": "Promise<unknown>",
+          "support": "unestablished",
+          "constraints": [
+            "wsl-windows",
+            "explicit caller-owned assignment"
+          ],
+          "observations": [
+            "Exact unique Extensions.getExtensions ID"
+          ],
+          "limits": [
+            "Does not prove application behavior",
+            "Current deployed support remains unestablished; mocks/types are not live evidence"
+          ],
+          "effects": [],
+          "ownership": "Borrowed CDP session",
+          "prerequisites": [
+            "assigned exact extension ID",
+            "installed Extensions domain"
+          ],
+          "deadlineMs": 10000,
+          "evidenceRefs": []
+        },
+        {
+          "id": "chrome:extension-action",
+          "contractVersion": "1",
+          "export": "triggerExtensionAction",
+          "inputType": "Browser, {extensionId, target:{filter,criteria}}",
+          "outputType": "Promise<unknown>",
+          "support": "unestablished",
+          "constraints": [
+            "wsl-windows",
+            "explicit caller-owned assignment"
+          ],
+          "observations": [
+            "Attempted/invoked/raw command and protocol observations"
+          ],
+          "limits": [
+            "Exactly one trigger; tab type required; command completion is not product proof",
+            "Current deployed support remains unestablished; mocks/types are not live evidence"
+          ],
+          "effects": [
+            "extension-action"
+          ],
+          "ownership": "Temporary owned session detached; browser borrowed",
+          "prerequisites": [
+            "authorized protocol trigger",
+            "unique fresh extension and tab"
+          ],
+          "deadlineMs": 10000,
+          "evidenceRefs": []
+        },
+        {
+          "id": "chrome:target-observer",
+          "contractVersion": "1",
+          "export": "observeTargets",
+          "inputType": "Browser, TargetFilter[], number",
+          "outputType": "Promise<TargetObserver>",
+          "support": "established",
+          "constraints": [
+            "wsl-windows",
+            "explicit caller-owned assignment",
+            "Assigned Chrome for Testing 154.0.8037.92 empirical scope only; fresh caller runtime/source validation still required"
+          ],
+          "observations": [
+            "Ordered initial/created/changed/destroyed observations",
+            "Finite finish, loss/overflow and cleanup"
+          ],
+          "limits": [
+            "Subscription can affect browser observation; no idle-worker suspension proof",
+            "Owned page/worker creation/change/destruction observed; cleanup destruction is not proof of supported worker interruption",
+            "Initial subscription Target.targetCreated callbacks can enumerate existing targets; baseline is not new creation proof; owned creation stimulus occurred after ready"
+          ],
+          "effects": [
+            "target-discovery-subscription"
+          ],
+          "ownership": "Owned temporary CDP session and listeners",
+          "prerequisites": [
+            "explicit filter/limit",
+            "supported Target domains"
+          ],
+          "deadlineMs": 10000,
+          "evidenceRefs": [
+            "contracts/capability-evidence.md#target-lifecycle"
+          ]
+        },
+        {
+          "id": "chrome:network-observer",
+          "contractVersion": "1",
+          "export": "observeNetwork",
+          "inputType": "CDPSession, NetworkScope",
+          "outputType": "Promise<NetworkObserver>",
+          "support": "established",
+          "constraints": [
+            "wsl-windows",
+            "explicit caller-owned assignment",
+            "Assigned Chrome for Testing 154.0.8037.92 empirical scope only; fresh caller runtime/source validation still required",
+            "Established owned page CDP stream only; no worker, cross-process frame or extension source coverage established"
+          ],
+          "observations": [
+            "Scoped source/session request records preserving raw initiator/frame/loader metadata",
+            "Finite finish/loss/overflow"
+          ],
+          "limits": [
+            "URL is not extension attribution; page stream does not cover missing workers",
+            "CDP identities do not become extension document IDs",
+            "Finite body-completed request observed; no absence proof or extension attribution",
+            "Session identity is provider.session caller lifetime key unless actual cdp.session mapping supplied",
+            "Network.enable remains active on borrowed session; caller disposes source session"
+          ],
+          "effects": [
+            "network-subscription"
+          ],
+          "ownership": "Borrowed session; owned listeners",
+          "prerequisites": [
+            "exact source/session/target identity",
+            "current loss signal",
+            "complete assigned source scope"
+          ],
+          "deadlineMs": 10000,
+          "evidenceRefs": [
+            "contracts/capability-evidence.md#network"
+          ]
+        },
+        {
+          "id": "chrome:worker-interruption",
+          "contractVersion": "1",
+          "export": "interruptWorker",
+          "inputType": "Browser, WorkerAssignment",
+          "outputType": "Promise<WorkerInterruption>",
+          "support": "unavailable",
+          "constraints": [
+            "wsl-windows",
+            "explicit caller-owned assignment"
+          ],
+          "observations": [
+            "Exact fresh assigned dedicated-worker target",
+            "Accepted stop plus destruction before separately authorized wake",
+            "Fresh replacement target/session and owned detach"
+          ],
+          "limits": [
+            "Forced stop does not establish natural idle suspension",
+            "Target discovery/debugger attachment may alter worker lifetime",
+            "Only dedicated workers; unsupported stop never wakes/retries",
+            "Assigned Chrome rejected exact dedicated worker Target.closeTarget: Specified target doesn't support closing; no wake/reacquisition proof"
+          ],
+          "effects": [
+            "assigned-worker-stop",
+            "separately-authorized-wake",
+            "replacement-debugger-attachment"
+          ],
+          "ownership": "Borrowed browser/assigned workers; owned temporary sessions",
+          "prerequisites": [
+            "explicit exact disposable-worker assignment",
+            "supported Target.closeTarget",
+            "separately authorized wake"
+          ],
+          "deadlineMs": 10000,
+          "evidenceRefs": [
+            "contracts/capability-evidence.md#worker-interruption"
+          ]
+        },
+        {
+          "id": "chrome:permission-observation",
+          "contractVersion": "1",
+          "export": "observePermission",
+          "inputType": "Page, string, PermissionName",
+          "outputType": "Promise<PermissionObservation>",
+          "support": "established",
+          "constraints": [
+            "wsl-windows",
+            "explicit caller-owned assignment",
+            "Assigned Chrome for Testing 154.0.8037.92 empirical scope only; fresh caller runtime/source validation still required",
+            "Established notifications query at the assigned insecure owned HTTP origin only; other origins/names require source readiness"
+          ],
+          "observations": [
+            "Actual navigator.permissions query state at exact current origin"
+          ],
+          "limits": [
+            "Snapshot only; no native prompt/action proof",
+            "No extension permission API or permission change coverage"
+          ],
+          "effects": [],
+          "ownership": "Borrowed exact execution context; no permission mutation",
+          "prerequisites": [
+            "current assigned origin",
+            "supported Permissions API descriptor"
+          ],
+          "deadlineMs": 10000,
+          "evidenceRefs": [
+            "contracts/capability-evidence.md#permission"
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "id": "generic:web",
+      "version": "unpublished-development",
+      "entry": "dist/runtime/index.js",
+      "declarations": "dist/runtime/index.d.ts",
+      "capabilities": [
+        {
+          "id": "web:geometry",
+          "contractVersion": "1",
+          "export": "geometry",
+          "inputType": "Locator, {namespace,value}",
+          "outputType": "Promise<GeometryObservation>",
+          "support": "unestablished",
+          "constraints": [
+            "wsl-windows",
+            "explicit caller-owned assignment"
+          ],
+          "observations": [
+            "CSS viewport bounding box, viewport scale and target identity"
+          ],
+          "limits": [
+            "No implicit mapping to Windows screen coordinates",
+            "Current deployed support remains unestablished; mocks/types are not live evidence"
+          ],
+          "effects": [],
+          "ownership": "Borrowed page/locator",
+          "prerequisites": [
+            "grounded assigned target"
+          ],
+          "deadlineMs": 10000,
+          "evidenceRefs": []
+        },
+        {
+          "id": "web:dom-identity",
+          "contractVersion": "1",
+          "export": "sameDomObject",
+          "inputType": "ElementHandle, ElementHandle",
+          "outputType": "Promise<boolean>",
+          "support": "unestablished",
+          "constraints": [
+            "wsl-windows",
+            "explicit caller-owned assignment"
+          ],
+          "observations": [
+            "Exact retained DOM reference comparison in same execution context"
+          ],
+          "limits": [
+            "Navigation/replacement/detachment invalidate handles; locator equality is insufficient",
+            "Current deployed support remains unestablished; mocks/types are not live evidence"
+          ],
+          "effects": [],
+          "ownership": "Borrowed real handles; caller disposes owned handles",
+          "prerequisites": [
+            "two current handles in relevant execution context"
+          ],
+          "deadlineMs": 10000,
+          "evidenceRefs": []
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "id": "generic:native",
+      "version": "unpublished-development",
+      "entry": "dist/runtime/index.js",
+      "declarations": "dist/runtime/index.d.ts",
+      "capabilities": [
+        {
+          "id": "native:semantic",
+          "contractVersion": "1",
+          "export": "nativeOperation",
+          "inputType": "NativeOperationInput",
+          "outputType": "Promise<NativeOperationObservation>",
+          "support": "unestablished",
+          "constraints": [
+            "wsl-windows",
+            "explicit caller-owned assignment"
+          ],
+          "observations": [
+            "Raw windows/tree/inspect/invoke/expand observations and structured phase/attempt metadata"
+          ],
+          "limits": [
+            "Window-only roots; no Document traversal",
+            "UIA Invoke/Expand completes semantic pattern only; no callback/product proof",
+            "Cancellation after possible action remains uncertain; no replay",
+            "Window/tree inspection observed; Invoke/Expand and native prompt interaction remain unestablished; owned menu stimulus exposed no Menu/MenuItem"
+          ],
+          "effects": [
+            "assigned-native-invoke-or-expand"
+          ],
+          "ownership": "Only invocation-owned bridge process; persistent Chrome borrowed",
+          "prerequisites": [
+            "explicit runtime config and PowerShell",
+            "exact unique live criteria",
+            "supported visible/enabled UIA patterns",
+            "assigned semantic action"
+          ],
+          "deadlineMs": 10000,
+          "evidenceRefs": [
+            "contracts/capability-evidence.md#native-menu",
+            "contracts/capability-evidence.md#native-cancellation"
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "id": "generic:host",
+      "version": "unpublished-development",
+      "entry": "dist/runtime/index.js",
+      "declarations": "dist/runtime/index.d.ts",
+      "capabilities": [
+        {
+          "id": "host:session",
+          "contractVersion": "1",
+          "export": "acquireSession",
+          "inputType": "HostConfig",
+          "outputType": "Promise<OwnedSession>",
+          "support": "unestablished",
+          "constraints": [
+            "wsl-windows",
+            "explicit caller-owned assignment"
+          ],
+          "observations": [
+            "Fresh runtime incarnation/current CDP endpoint with retained owned transport",
+            "Revalidation and bounded ownership disposal"
+          ],
+          "limits": [
+            "Only supported WSL to Windows runtime; no installer/profile reset",
+            "Authorized launch does not transfer persistent browser ownership",
+            "Current deployed support remains unestablished; mocks/types are not live evidence"
+          ],
+          "effects": [
+            "assigned-launch-only"
+          ],
+          "ownership": "Owned relay/stream processes; borrowed persistent browser/profile",
+          "prerequisites": [
+            "explicit existing Windows executable/profile/port",
+            "unique debug listener",
+            "assigned reuse/launch"
+          ],
+          "deadlineMs": 10000,
+          "evidenceRefs": []
+        }
+      ]
+    }
+  ]
+}

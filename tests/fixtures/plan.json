@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "planId": "reference-observation",
+  "sourceReferences": [
+    {
+      "id": "requirement",
+      "path": "requirements.md",
+      "reference": "Read-only browser version observation"
+    }
+  ],
+  "environments": [
+    {
+      "id": "assigned-chrome",
+      "topology": "wsl-windows",
+      "description": "Explicit caller-assigned Chrome build"
+    }
+  ],
+  "prerequisites": [
+    {
+      "id": "assignment",
+      "description": "Current caller-owned browser assignment",
+      "dependsOn": []
+    }
+  ],
+  "configurationReferences": [
+    {
+      "id": "fixture",
+      "path": "verification-fixtures.ts",
+      "disposition": "planned",
+      "purpose": "fixture"
+    }
+  ],
+  "claims": [
+    {
+      "id": "browser-version",
+      "sourceRefs": [
+        "requirement"
+      ],
+      "expected": "The assigned browser reports the expected caller-selected build",
+      "proof": [
+        {
+          "id": "version-observation",
+          "source": "requirement",
+          "description": "Current Browser.getVersion record with runtime identity",
+          "mandatory": true,
+          "capabilityId": "chrome:version",
+          "capabilityVersion": "1",
+          "acceptedSources": [
+            {
+              "source": "Browser.getVersion",
+              "providerId": "chrome"
+            }
+          ]
+        }
+      ],
+      "environmentIds": [
+        "assigned-chrome"
+      ],
+      "prerequisiteIds": [
+        "assignment"
+      ],
+      "mode": "automated",
+      "allowedEffects": [],
+      "timing": {
+        "deadlineMs": 10000
+      },
+      "support": {
+        "disposition": "generic",
+        "reason": "Read-only browser protocol observation",
+        "configurationRefs": [
+          "fixture"
+        ]
+      }
+    }
+  ]
+}

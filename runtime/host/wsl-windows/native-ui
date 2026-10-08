@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+: "${BROWSER_VERIFICATION_POWERSHELL:?Set Windows PowerShell executable reachable from WSL}"
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+windows_script=$(wslpath -w "$script_dir/native-ui.ps1")
+exec "$BROWSER_VERIFICATION_POWERSHELL" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$windows_script" "$@"

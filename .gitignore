@@ -1,0 +1,8 @@
+node_modules/
+dist/
+test-results/
+candidate/
+__pycache__/
+distribution/import-provenance.json
+distribution/agent-config-provenance.json
+examples/capability-evidence/slice4-live.json

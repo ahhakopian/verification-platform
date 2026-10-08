@@ -1,0 +1,166 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "providers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1
+          },
+          "entry": {
+            "type": "string",
+            "minLength": 1
+          },
+          "declarations": {
+            "type": "string",
+            "minLength": 1
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[^: ]+:[^: ]+$"
+                },
+                "contractVersion": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "export": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "inputType": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "outputType": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "support": {
+                  "enum": [
+                    "unestablished",
+                    "established",
+                    "unavailable"
+                  ]
+                },
+                "constraints": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0,
+                  "uniqueItems": true
+                },
+                "observations": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0,
+                  "uniqueItems": true
+                },
+                "limits": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0,
+                  "uniqueItems": true
+                },
+                "effects": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0,
+                  "uniqueItems": true
+                },
+                "ownership": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "prerequisites": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0,
+                  "uniqueItems": true
+                },
+                "deadlineMs": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0,
+                  "uniqueItems": true
+                }
+              },
+              "required": [
+                "id",
+                "contractVersion",
+                "export",
+                "inputType",
+                "outputType",
+                "support",
+                "constraints",
+                "observations",
+                "limits",
+                "effects",
+                "ownership",
+                "prerequisites",
+                "deadlineMs",
+                "evidenceRefs"
+              ]
+            },
+            "minItems": 0
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "id",
+          "version",
+          "entry",
+          "declarations",
+          "capabilities"
+        ]
+      },
+      "minItems": 0
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "providers"
+  ]
+}

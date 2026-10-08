@@ -1,0 +1,3 @@
+import {readFileSync} from 'node:fs';import {defineConfig} from '@playwright/test';
+const input=JSON.parse(readFileSync(process.env.VERIFICATION_REFERENCE_INPUT,'utf8'));
+export default defineConfig({testDir:'.',testMatch:'readiness.spec.ts',workers:1,fullyParallel:false,retries:0,outputDir:input.outputRoot,use:{executionIdentity:input.identity,pageUrl:'https://fixture.invalid',hostConfig:{runtimeConfig:input.missingRuntimeConfig,powershell:'must-not-run',launch:false,readinessMs:1000,disposalMs:100}},reporter:[['../../dist/runtime/reporter.js',{...input,resultPath:input.resultPath,sourceRoot:process.cwd()}]]});

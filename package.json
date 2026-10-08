@@ -1,0 +1,12 @@
+{
+  "name": "@verification-platform/support",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Unpublished development source for the single Verification Platform distribution",
+  "exports": {"./validation": "./dist/src/validation/plan.js", "./result-validation":"./dist/src/validation/result.js", "./resources": "./dist/src/resources/resolve.js", "./contracts": "./dist/src/contracts/index.js", "./runtime":"./dist/runtime/index.js", "./reporter":"./dist/runtime/reporter.js", "./invocation":"./dist/runtime/invoke.js", "./compilation":"./dist/src/compilation/bundle.js"},
+  "bin": {"verification-validate": "./dist/src/validation/cli.js", "verification-validate-result":"./dist/src/validation/result-cli.js"},
+  "scripts": {"build": "node distribution/clean-build.mjs && tsc && node distribution/copy-assets.mjs", "test": "npm run build && node --test tests/contracts/*.test.mjs tests/runtime/*.test.mjs"},
+  "dependencies": {"ajv": "8.17.1", "@playwright/test": "1.63.0-alpha-2026-08-31", "typescript":"5.9.3"},
+  "devDependencies": {"@types/node": "24.3.0"}
+}
