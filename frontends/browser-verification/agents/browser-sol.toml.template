@@ -1,7 +1,7 @@
 name = "browser_sol"
-description = "Browser escalation for unresolved technical ambiguity or difficult diagnosis; Sol Medium."
-model = "gpt-6.1-sol"
-model_reasoning_effort = "medium"
+description = "Browser escalation for unresolved technical ambiguity or difficult diagnosis; Luna High."
+model = "gpt-6-luna"
+model_reasoning_effort = "high"
 approvals_reviewer = "auto_review"
 
 developer_instructions = """
