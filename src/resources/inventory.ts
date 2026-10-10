@@ -12,7 +12,7 @@ export const publicEntries = {
  'dist/frontends/verification-orchestrator/SKILL.md':'verification-orchestrator'
 } as const;
 const modules = [
- 'runtime/index','runtime/fixtures','runtime/catalog','runtime/readiness',
+ 'runtime/index','runtime/preflight','runtime/fixtures','runtime/catalog','runtime/readiness',
  'runtime/reporter','runtime/invoke','runtime/evidence/records','runtime/evidence/reconcile','runtime/evidence/readiness',
  'runtime/cdp/index','runtime/cdp/target-observer','runtime/cdp/network-observer','runtime/cdp/worker','runtime/cdp/permission','runtime/cdp/geometry',
  'runtime/host/wsl-windows/session','runtime/host/wsl-windows/process','runtime/host/wsl-windows/native','runtime/host/wsl-windows/native-menu',
@@ -27,6 +27,8 @@ const assets = [
  'runtime/host/wsl-windows/native-ui.ps1','runtime/host/wsl-windows/native-ui',
  'runtime/host/wsl-windows/wsl-windows-chrome-current.md',
  'frontends/browser-verification/SKILL.md','frontends/browser-verification/assets/playwright-cdp-timeout.md',
+ 'frontends/browser-verification/assets/follow-execution.cjs',
+ 'frontends/browser-verification/assets/browser-worker-routing.cjs',
  'frontends/browser-verification/agents/browser-luna.toml.template','frontends/browser-verification/agents/browser-sol.toml.template',
  'frontends/verification-orchestrator/SKILL.md'
 ];

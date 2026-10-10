@@ -61,6 +61,20 @@ def incarnation(record):
     return (record["process_id"], record["started_at"], record["webSocketDebuggerUrl"])
 
 
+def validate_closed_baseline(record, config):
+    if isinstance(record, dict) and record.get("state") == "RUNNING":
+        return validate_snapshot(record, config)
+    validate_config(config)
+    if (not isinstance(record, dict) or record.get("status") != "ok" or record.get("state") != "STOPPED"
+            or record.get("binary", "").casefold() != config["executable"].casefold()
+            or record.get("profile", "").casefold() != config["profile"].casefold()
+            or not record.get("version") or (config.get("version") and record["version"] != config["version"])
+            or type(record.get("profileProcessCount")) is not int or record["profileProcessCount"] != 0
+            or type(record.get("listenerCount")) is not int or record["listenerCount"] != 0):
+        raise Blocked("Closed baseline absence is unproved: " + str(record))
+    return record
+
+
 class Windows:
     def __init__(self, config_path, powershell):
         self.config = validate_config(json.loads(Path(config_path).read_text()))
@@ -96,6 +110,13 @@ class Windows:
             "-ExpectedProcessId", str(record["process_id"]), "-ExpectedStartedAt", record["started_at"],
             "-ExpectedWebSocket", record["webSocketDebuggerUrl"]],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    def closed_baseline(self):
+        result = subprocess.run(self.command("baseline"), capture_output=True, text=True,
+                                timeout=min(30, self.startup_timeout(30, "closed baseline inspection")))
+        if result.returncode != 0:
+            raise Blocked("Closed baseline inspection failed: " + result.stdout.strip() + result.stderr.strip())
+        return validate_closed_baseline(json.loads(result.stdout.lstrip("\ufeff")), self.config)
 
 
 class Relay(socketserver.ThreadingTCPServer):

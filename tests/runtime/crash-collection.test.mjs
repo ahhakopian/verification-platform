@@ -14,3 +14,24 @@ test('crash collection ignores Playwright attachment copies and preserves decisi
  assert.equal(returned.result.verdict,'FAIL');assert.equal(returned.result.runner.status,'incomplete-collection');assert.equal(returned.runnerExitCode,1);assert.equal(returned.acceptanceExitCode,1);
  assert.deepEqual(returned.result.claims[0].evidenceIds,['version-evidence']);assert(!returned.result.limitations.some(x=>x.includes('Rejected evidence identity/format')));
 });
+
+test('crash finalizer consumes flushed preflight blockers once and persists NOT RUN claims',async()=>{
+ const {PreflightRecorder}=await import('../../dist/runtime/evidence/readiness.js');
+ const f=currentResultFixture(),root=f.projectRoot,output=join(root,'output');mkdirSync(output,{recursive:true});
+ const recorder=new PreflightRecorder(output,f.manifest.identity,'assigned-chrome',0);
+ await recorder.blocked('browser','Configured browser unavailable');
+ mkdirSync(join(output,'attachments'));for(const file of (await import('node:fs')).readdirSync(output).filter(p=>p.startsWith('preflight-')))cpSync(join(output,file),join(output,'attachments',file));
+ writeFileSync(join(root,'runner.mjs'),'process.exitCode=1;');
+ const result=await invokePlaywright({plan:JSON.parse(f.planBytes),assignment:f.assignment,manifest:f.manifest,identity:f.manifest.identity,outputRoot:output,cwd:root,resultPath:join(root,'crash-result.json'),runnerEntry:join(root,'runner.mjs'),config:'unused'});
+ assert.equal(result.result.verdict,'BLOCKED');assert.equal(result.result.runner.status,'incomplete-collection');assert.equal(result.runnerExitCode,1);assert.match(result.result.claims[0].reason,/NOT RUN/);assert.deepEqual(result.result.claims[0].evidenceIds,[]);
+ const fs=await import('node:fs');const claims=fs.readdirSync(output).filter(p=>p.startsWith('claim-readiness-')).map(p=>JSON.parse(fs.readFileSync(join(output,p))));assert.equal(claims.length,1);assert.equal(claims[0].attempted,false);
+});
+test('preflight READY without product records cannot pass crash finalization',async()=>{
+ const {PreflightRecorder}=await import('../../dist/runtime/evidence/readiness.js');
+ const f=currentResultFixture(),root=f.projectRoot,output=join(root,'output');mkdirSync(output,{recursive:true});
+ const recorder=new PreflightRecorder(output,f.manifest.identity,'assigned-chrome',0);
+ for(const [stage,status] of [['browser','PASS'],['project','PASS'],['target','PASS'],['gate','ENVIRONMENT READY']])await recorder.append({stage,status,reason:'Fixture readiness',observations:{},evidence:[],cleanupErrors:[]});
+ writeFileSync(join(root,'runner.mjs'),'process.exitCode=0;');
+ const returned=await invokePlaywright({plan:JSON.parse(f.planBytes),assignment:f.assignment,manifest:f.manifest,identity:f.manifest.identity,outputRoot:output,cwd:root,resultPath:join(root,'crash-result.json'),runnerEntry:join(root,'runner.mjs'),config:'unused'});
+ assert.equal(returned.result.verdict,'INCONCLUSIVE');assert.equal(returned.acceptanceExitCode,1);assert.equal(returned.result.counts.FAIL,0);assert.equal(returned.result.counts.PASS,0);
+});

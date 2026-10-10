@@ -27,4 +27,6 @@ is overwritten by build or assembly.
 
 Consumers compose ordinary `test.extend` fixtures and supply exact plans/bindings, explicit fixture/provider imports, actual Windows runtime configuration, allowed effects/ownership and caller authorization. Use one worker, no full parallelism and zero retries for shared caller-owned Chrome/native desktop. Borrowed browser/profile/pages remain caller-owned. Missing permissions/capabilities/runtime block affected obligations without fallback or hidden retry.
 
+The [preflight design and Sol Medium implementation handoff](docs/architecture/verification-platform-preflight.md) specifies the agreed BrowserPreflight → optional ProjectPreflightHook → TargetPreflight → ENVIRONMENT READY addition against v0.2.0. The shared runtime implements these setup stages; preflight readiness remains separate from product proof. Caller fixture configuration supplies current plan/assignment/manifest identities and the optional deterministic project hook; see the composition example.
+
 Candidate assembly is described in [release procedure](distribution/RELEASE.md). Synthetic relocation fixtures passed; real source/release identity and active feature adoption are separate prerequisites. No tagging/upload/publication or consumer installation was performed.

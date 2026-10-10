@@ -37,4 +37,6 @@ const schemas = {
 };
 schemas.readiness=obj({schemaVersion:version,capabilityId:str,environmentId:str,status:enumOf('available','unavailable'),reason:str,evidenceRefs:names()});
 schemas['invocation-return']=obj({schemaVersion:version,status:enumOf('generated','generation-blocked','complete'),bundle:names(),manifest:str,result:str,evidence:names(),runnerExitCode:{type:['integer','null']},acceptanceExitCode:{type:'integer',minimum:0},diagnostics:names()},['bundle','manifest','result']);
+schemas.preflight=obj({schemaVersion:version,identity,environmentId:str,workerIndex:{type:'integer',minimum:0},testKey:str,sequence:{type:'integer',minimum:0},stage:enumOf('browser','project','target','gate'),status:str,reason:str,observations:{type:'object'},evidence:list(obj({path:str,sha256:digest})),cleanupErrors:list({type:'string'})},['testKey']);
+schemas.preflight.allOf=[['browser',['PASS','RECOVERED','BLOCKED']],['project',['PASS','BLOCKED']],['target',['PASS','CREATED','BLOCKED']],['gate',['ENVIRONMENT READY','PREFLIGHT_BLOCKED']]].map(([stage,statuses])=>({if:{properties:{stage:{const:stage}}},then:{properties:{status:enumOf(...statuses)}}}));
 for(const [name,schema] of Object.entries(schemas)) writeFileSync(root+name+'.schema.json',JSON.stringify({$schema:'http://json-schema.org/draft-07/schema#',...schema},null,2)+'\n');

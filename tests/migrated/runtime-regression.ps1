@@ -30,7 +30,10 @@ function Get-CimInstance {
   $id = [int]($Filter -replace 'ProcessId = ', '')
   @($script:processes | Where-Object { $_.ProcessId -eq $id })
 }
-function Get-NetTCPConnection { param($State, $LocalPort, $ErrorAction) $script:listeners }
+function Get-NetTCPConnection {
+  param($State, $LocalPort, $ErrorAction)
+  foreach ($listener in $script:listeners) { [pscustomobject]@{OwningProcess=$listener.OwningProcess; State='Listen'; LocalPort=9317} }
+}
 function Get-Item { param($LiteralPath) [pscustomobject]@{VersionInfo=[pscustomobject]@{ProductVersion=$script:installedVersion}} }
 function Test-Path { param($LiteralPath, $PathType) $script:profileExists }
 function Invoke-RestMethod {
@@ -86,4 +89,26 @@ AssertBlocked { Ensure-Runtime } 'Duplicate profile process was accepted.'
 $script:processes = @(); $script:listeners = @([pscustomobject]@{OwningProcess=999})
 AssertBlocked { Ensure-Runtime } 'Occupied port allowed a second launch.'
 Assert ($script:launches -eq 1) 'Conflict started another browser.'
+
+# CLOSED baseline is distinct from live attachment; absence never launches.
+$script:processes = @(); $script:listeners = @()
+$absent = Get-ClosedBaselineState
+Assert ($absent.state -ceq 'STOPPED' -and $absent.profileProcessCount -eq 0 -and $absent.listenerCount -eq 0) 'Confirmed absence did not establish CLOSED baseline.'
+Fixture 123 'existing-process'
+Assert ((Get-ClosedBaselineState).state -ceq 'RUNNING') 'Exact live configured browser was not identified for explicit reset.'
+$script:listeners = @()
+AssertBlocked { Get-ClosedBaselineState } 'Active profile without listener was misclassified as absent.'
+$script:processes = @(); $script:listeners = @([pscustomobject]@{OwningProcess=999})
+AssertBlocked { Get-ClosedBaselineState } 'Unknown listener was misclassified as absent.'
+Fixture 123 'existing-process'
+$script:processes += $script:processes[0]
+AssertBlocked { Get-ClosedBaselineState } 'Duplicate profile was misclassified as a valid baseline.'
+$script:processes = @([pscustomobject]@{Name='browser.exe'; ExecutablePath=$null; CommandLine=$null}); $script:listeners = @()
+AssertBlocked { Get-ClosedBaselineState } 'Inaccessible candidate was misclassified as absent.'
+$script:processes = @([pscustomobject]@{Name='browser.exe'; ExecutablePath=$contract.executable; CommandLine='browser.exe'});
+AssertBlocked { Get-ClosedBaselineState } 'Unproved default profile was misclassified as absent.'
+$script:processes = @()
+function Get-NetTCPConnection { throw 'Host permission unavailable' }
+AssertBlocked { Get-ClosedBaselineState } 'Host inspection failure was misclassified as absent.'
+Assert ($script:launches -eq 1) 'Baseline inspection launched Chrome.'
 Write-Output 'PASS: configured reuse/launch, profile/port conflicts, version, fresh discovery, stale rejection.'

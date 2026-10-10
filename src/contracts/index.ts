@@ -29,3 +29,17 @@ export interface Invocation { schemaVersion: 1; planPath: string; planDigest: Di
 export interface InvocationReturn { schemaVersion:1;status: 'generated' | 'generation-blocked' | 'complete'; bundle?: string[]; manifest?: string; result?: string; evidence: string[]; runnerExitCode: number | null; acceptanceExitCode: number; diagnostics: string[] }
 export interface OwnedSession { endpoint: string; provenance: unknown; revalidate(): Promise<void>; dispose(): Promise<void> }
 export interface Observer<T> { ready: Promise<void>; observations: T[]; loss: string[]; dispose(): Promise<void> }
+export type JsonValue = null | boolean | number | string | JsonValue[] | {[key:string]:JsonValue};
+export interface ProjectPreflightHookReference {contractVersion:1;entry:string;sha256:Digest;deadlineMs:number;input:JsonValue}
+export interface BrowserProvenance {binary:string;profile:string;version:string;process_id:number;started_at:string;webSocketDebuggerUrl:string;launched?:boolean}
+export interface ProjectPreflightContext {
+ contractVersion:1;projectRoot:string;environmentId:string;executionIdentity:ExecutionIdentity;
+ browser:import('@playwright/test').Browser;browserProvenance:BrowserProvenance;input:JsonValue;
+ evidenceDirectory:string;deadlineMs:number;signal:AbortSignal;
+}
+export interface ProjectPreflightResult {contractVersion:1;status:'READY'|'NEEDS_HITL'|'BLOCKED';reason:string;evidence:{path:string;sha256:Digest}[];hitl?:{action:string;reason:string}}
+export interface PreflightRecord {
+ schemaVersion:1;identity:ExecutionIdentity;environmentId:string;workerIndex:number;testKey?:string;sequence:number;
+ stage:'browser'|'project'|'target'|'gate';status:string;reason:string;observations:JsonValue;
+ evidence:{path:string;sha256:Digest}[];cleanupErrors:string[];
+}

@@ -5,3 +5,15 @@ function fixture(){const outputRoot=mkdtempSync(join(tmpdir(),'verification-agen
 test('agent facts/readable state translate through shared mandatory-evidence reconciliation',()=>{const f=fixture(),report=reconcileAgentResult(f);assert.equal(report.result.verdict,'PASS');assert.equal(report.scope,'plan');assert.match(report.readable,/browser-version\/assigned-chrome: PASS/);assert.deepEqual(report.rejectedClaims,f.rejectedClaims);assert.deepEqual(report.attachmentState,f.attachmentState);f.evidence=[];assert.equal(reconcileAgentResult(f).result.verdict,'INCONCLUSIVE');});
 test('bounded assignment preserves unattempted outside coverage and cannot claim plan-wide PASS',()=>{const f=fixture();f.plan=structuredClone(plan);f.plan.claims.push({...structuredClone(plan.claims[0]),id:'unassigned',proof:[{...plan.claims[0].proof[0],id:'unassigned-proof'}]});f.manifest.entries.push({...structuredClone(manifest.entries[0]),claimId:'unassigned',proofIds:['unassigned-proof'],testKey:'unassigned-key'});const report=reconcileAgentResult(f);assert.equal(report.scope,'bounded');assert.equal(report.result.verdict,'BLOCKED');assert.equal(report.result.claims.length,2);assert.equal(report.result.claims[0].verdict,'PASS');});
 test('unavailable unattempted agent claims remain blocked while attempted missing proof stays uncertain',()=>{const f=fixture();f.observations[0].attempted=false;f.observations[0].conclusion='unavailable';f.observations[0].reason='Required source unavailable';assert.equal(reconcileAgentResult(f).result.verdict,'BLOCKED');f.observations[0].attempted=true;assert.equal(reconcileAgentResult(f).result.verdict,'INCONCLUSIVE');});
+
+test('agent reports separate preflight facts and NOT RUN through shared blocker reconciliation',async()=>{
+ const {PreflightRecorder}=await import('../../dist/runtime/evidence/readiness.js');const f=fixture();f.observations=[];f.evidence=[];
+ const recorder=new PreflightRecorder(f.outputRoot,identity,'assigned-chrome',0);await recorder.blocked('browser','Host approval required');
+ f.preflightRecords=recorder.records;const report=reconcileAgentResult(f);assert.equal(report.result.verdict,'BLOCKED');assert.match(report.readable,/preflight.browser BLOCKED/);assert.match(report.readable,/proof: NOT RUN/);assert.deepEqual(report.result.claims[0].evidenceIds,[]);
+});
+test('agent READY preflight cannot establish product proof and stale preflight is rejected',async()=>{
+ const {PreflightRecorder}=await import('../../dist/runtime/evidence/readiness.js');const f=fixture();f.observations=[];f.evidence=[];
+ const recorder=new PreflightRecorder(f.outputRoot,identity,'assigned-chrome',0);
+ for(const [stage,status] of [['browser','PASS'],['project','PASS'],['target','PASS'],['gate','ENVIRONMENT READY']])await recorder.append({stage,status,reason:'Fixture setup',observations:{},evidence:[],cleanupErrors:[]});
+ f.preflightRecords=recorder.records;assert.equal(reconcileAgentResult(f).result.verdict,'INCONCLUSIVE');f.preflightRecords[0].identity={...identity,attempt:99};assert.throws(()=>reconcileAgentResult(f),/identity mismatch/);
+});

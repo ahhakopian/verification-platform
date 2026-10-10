@@ -13,3 +13,4 @@ export type {OwnedSession} from '../src/contracts/index.js';
 export * from './cdp/worker.js';
 export * from './cdp/permission.js';
 export * from './host/wsl-windows/native-menu.js';
+export * from './preflight.js';

@@ -7,6 +7,7 @@ import {sourceDigest} from '../src/validation/result.js';
 import {validateCoverage} from '../src/compilation/coverage.js';
 import {validateSchema} from '../src/validation/schema.js';
 import {sha256} from '../src/resources/resolve.js';
+import {collectPreflight,preflightBlockerClaims,persistPreflightClaims,readablePreflight} from './evidence/readiness.js';
 export async function invokePlaywright(input:Omit<Reconciliation,'records'|'evidence'|'runner'> & {runnerEntry:string;config:string;resultPath:string;cwd:string}){
  const errors=validateCoverage(input.plan,input.assignment,input.manifest);
  if(errors.length||input.identity.generatedSourceDigest!==sourceDigest(input.cwd,input.manifest.entries.filter(e=>!e.blocker).map(e=>e.source!)))throw Error('Current bundle identity/coverage mismatch: '+errors.join('; '));
@@ -28,9 +29,13 @@ export async function invokePlaywright(input:Omit<Reconciliation,'records'|'evid
  // recorder files once; copied attachments must not duplicate evidence IDs.
  const collect=(dir:string)=>{for(const e of readdirSync(dir,{withFileTypes:true})){const path=resolve(dir,e.name);if(e.isDirectory()){if(e.name!=='attachments')collect(path);}else if(e.name.endsWith('.json'))try{const value=JSON.parse(readFileSync(path,'utf8'));if(e.name.startsWith('claim-'))records.push(value);else if(e.name.startsWith('evidence-'))evidence.push(value);}catch{}}};
  try{collect(input.outputRoot);}catch{}
+ const preflight=collectPreflight(input.outputRoot,input.identity);
+ const blockers=preflightBlockerClaims(preflight.records,input.manifest,input.identity,records);
+ persistPreflightClaims(input.outputRoot,blockers);records.push(...blockers);
+ if(preflight.records.length)process.stdout.write(readablePreflight(preflight.records)+'\n');
  // Crash finalization preserves contradictions/attempt facts, but without a
  // current reporter's actual annotation/source joins it cannot accept PASS.
- const result=reconcile({...input,evidence,records,runner:{exitCode,status:'incomplete-collection'},limitations:[...(input.limitations??[]),'No current reporter finalization; standard runner mapping unproved']});
+ const result=reconcile({...input,evidence,records,runner:{exitCode,status:'incomplete-collection'},limitations:[...(input.limitations??[]),...preflight.errors,...preflight.records.flatMap(r=>r.cleanupErrors),'No current reporter finalization; standard runner mapping unproved']});
  writeFileSync(input.resultPath,JSON.stringify(result,null,2)+'\n');
  return {result,runnerExitCode:exitCode,acceptanceExitCode:result.verdict==='PASS'?0:1};
 }

@@ -85,6 +85,27 @@ while data:=s.recv(65536):
 
 
 class BrowserSessionTests(unittest.TestCase):
+    def test_closed_baseline_requires_explicit_absence_not_attach_error_text(self):
+        absent = {"status": "ok", "state": "STOPPED", "binary": CONFIG["executable"],
+                  "profile": CONFIG["profile"], "version": CONFIG["version"],
+                  "profileProcessCount": 0, "listenerCount": 0}
+        self.assertEqual(runtime.validate_closed_baseline(absent, CONFIG), absent)
+        self.assertEqual(runtime.validate_closed_baseline(record() | {"state": "RUNNING"}, CONFIG)["state"], "RUNNING")
+        for changed in ({"status": "BLOCKED", "detail": "Debugging listener is absent or ambiguous."},
+                        {"listenerCount": 1}, {"profileProcessCount": 2}, {"listenerCount": False},
+                        {"profile": "unknown"}, {"state": "unknown"}):
+            with self.subTest(changed=changed), self.assertRaises(runtime.Blocked):
+                runtime.validate_closed_baseline(absent | changed, CONFIG)
+
+    def test_closed_baseline_inspection_never_ensures_or_launches(self):
+        windows = object.__new__(runtime.Windows)
+        windows.config, windows.config_path, windows.powershell, windows.script = CONFIG, "fixture.json", "fixture", "fixture.ps1"
+        absent = {"status": "ok", "state": "STOPPED", "binary": CONFIG["executable"], "profile": CONFIG["profile"],
+                  "version": CONFIG["version"], "profileProcessCount": 0, "listenerCount": 0}
+        with patch.object(runtime.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, json.dumps(absent), "")) as run:
+            self.assertEqual(windows.closed_baseline()["state"], "STOPPED")
+        self.assertEqual(run.call_args.args[0][-1], "baseline")
+
     def test_runtime_values_come_only_from_configuration(self):
         self.assertEqual(runtime.validate_snapshot(record(), CONFIG), record())
         for changed in ({"binary": r"C:\OtherFixture\browser.exe"}, {"version": "1.2.3.4"},

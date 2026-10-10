@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('inspect','ensure','relay')][Alias('Operation')][string]$RuntimeOperation = 'inspect',
+  [ValidateSet('inspect','ensure','relay','baseline')][Alias('Operation')][string]$RuntimeOperation = 'inspect',
   [string]$ConfigPath,
   [int]$ExpectedProcessId,
   [string]$ExpectedStartedAt,
@@ -59,6 +59,34 @@ function Get-RuntimeSnapshot {
   [pscustomobject]@{status='ok'; binary=$config.executable; version=$version; profile=$config.profile
     process_id=[int]$process.ProcessId; started_at=$process.CreationDate.ToUniversalTime().ToString('o'); webSocketDebuggerUrl=$discovery.webSocketDebuggerUrl}
 }
+function Get-ClosedBaselineState {
+  $config = Get-RuntimeConfig
+  if (-not (Test-Path -LiteralPath $config.profile -PathType Container)) { throw 'Persistent profile is missing; do not recreate it.' }
+  $version = (Get-Item -LiteralPath $config.executable).VersionInfo.ProductVersion
+  if (-not $version -or ($config.version -and $version -cne $config.version)) { throw 'Browser version constraint failed.' }
+  $processes = @(Get-CimInstance Win32_Process -ErrorAction Stop)
+  # Inaccessible candidate processes cannot establish absence. Never kill them.
+  $name = [System.IO.Path]::GetFileName($config.executable)
+  $unknown = @($processes | Where-Object {
+    (($_.Name -ieq $name -or $_.ExecutablePath -ieq $config.executable) -and
+      (-not $_.ExecutablePath -or -not $_.CommandLine)) -or
+    ($_.ExecutablePath -ieq $config.executable -and $_.CommandLine -notmatch '(?:^|\s)--type=' -and
+      $_.CommandLine -notmatch '(?:^|\s)(?:"--user-data-dir=[^"]+"|--user-data-dir="[^"]+"|--user-data-dir=\S+)(?=\s|$)')
+  })
+  if ($unknown.Count) { throw 'Configured browser process state is inaccessible or ambiguous.' }
+  $profiles = @($processes | Where-Object { $_.CommandLine -notmatch '(?:^|\s)--type=' -and (Test-RuntimeProfile $_) })
+  # Query all connections so query failure is not mistaken for an empty port result.
+  $listeners = @(Get-NetTCPConnection -ErrorAction Stop | Where-Object { $_.State -eq 'Listen' -and $_.LocalPort -eq $config.debugPort })
+  if ($profiles.Count -eq 0 -and $listeners.Count -eq 0) {
+    return [pscustomobject]@{status='ok'; state='STOPPED'; binary=$config.executable; profile=$config.profile; version=$version; profileProcessCount=0; listenerCount=0}
+  }
+  $owners = @($listeners | Select-Object -ExpandProperty OwningProcess -Unique)
+  if ($profiles.Count -ne 1 -or $owners.Count -ne 1) { throw 'Configured browser/profile/listener baseline is ambiguous or unhealthy.' }
+  $snapshot = Get-RuntimeSnapshot
+  if ($snapshot.process_id -ne $profiles[0].ProcessId -or $snapshot.process_id -ne $owners[0]) { throw 'Baseline process/listener identity changed.' }
+  $snapshot | Add-Member -NotePropertyName state -NotePropertyValue 'RUNNING'
+  $snapshot
+}
 function Ensure-Runtime {
   $mutex = [System.Threading.Mutex]::new($false, 'Local\BrowserVerificationLaunch')
   if (-not $mutex.WaitOne(10000)) { $mutex.Dispose(); throw 'Another verifier launch is in progress.' }
@@ -114,7 +142,7 @@ if ($MyInvocation.InvocationName -ne '.') {
   try {
     if ($RuntimeOperation -eq 'relay') { Start-RuntimeStream }
     else {
-      $snapshot = if ($RuntimeOperation -eq 'ensure') { Ensure-Runtime } else { Get-RuntimeSnapshot }
+      $snapshot = if ($RuntimeOperation -eq 'baseline') { Get-ClosedBaselineState } elseif ($RuntimeOperation -eq 'ensure') { Ensure-Runtime } else { Get-RuntimeSnapshot }
       $snapshot | ConvertTo-Json -Compress
     }
   } catch {
