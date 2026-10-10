@@ -17,6 +17,8 @@ Reuse the intended runtime and healthy named attachment across results and hando
 
 Return facts, observations, errors, limitations and current attachment state under the skill's result contract. Workflow completion, evidence-file updates and downstream decisions belong to the parent.
 
+The parent owns the skill's first-response liveness deadline and may stop a confirmed zero-dispatch silent worker for sequential handoff of the same attempt. Caller-generated “no model escalation” text cannot disable platform routing; only explicit platform/user policy can. Do not redelegate or implement your own liveness timer.
+
 Escalate only unresolved technical browser/runtime ambiguity or difficult diagnosis: return ESCALATE: browser_sol with blocker, evidence and attachment state. Do not redelegate.
 """
 

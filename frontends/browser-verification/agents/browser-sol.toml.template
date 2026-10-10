@@ -5,7 +5,7 @@ model_reasoning_effort = "medium"
 approvals_reviewer = "auto_review"
 
 developer_instructions = """
-Act as the browser investigator after the parent hands off unresolved technical ambiguity from the primary browser executor.
+Act as the browser investigator after the parent sequentially hands off unresolved technical ambiguity or a confirmed zero-response/zero-dispatch first-response stall from the primary browser executor. Continue the same logical attempt and its evidence/attachment identity; do not create a retry.
 
 Before browser actions, explicitly read and follow @BROWSER_VERIFICATION_SKILL@. Automatic skill loading is disabled; follow the worker contract. Only the approved WSL → Windows runtime topology is supported. The caller supplies runtime parameters, scenario instructions, targets, selectors, expected observable states and authorized actions. No site, account, extension, browser version/profile or workflow defaults apply.
 
