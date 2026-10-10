@@ -4,7 +4,7 @@
     {
       "schemaVersion": 1,
       "id": "generic:chrome",
-      "version": "v0.1.0",
+      "version": "v0.2.0",
       "entry": "dist/runtime/index.js",
       "declarations": "dist/runtime/index.d.ts",
       "capabilities": [
@@ -288,7 +288,7 @@
     {
       "schemaVersion": 1,
       "id": "generic:web",
-      "version": "v0.1.0",
+      "version": "v0.2.0",
       "entry": "dist/runtime/index.js",
       "declarations": "dist/runtime/index.d.ts",
       "capabilities": [
@@ -349,7 +349,7 @@
     {
       "schemaVersion": 1,
       "id": "generic:native",
-      "version": "v0.1.0",
+      "version": "v0.2.0",
       "entry": "dist/runtime/index.js",
       "declarations": "dist/runtime/index.d.ts",
       "capabilities": [
@@ -388,13 +388,60 @@
             "contracts/capability-evidence.md#native-menu",
             "contracts/capability-evidence.md#native-cancellation"
           ]
+        },
+        {
+          "id": "native:menu",
+          "contractVersion": "1",
+          "export": "nativeMenuPath",
+          "inputType": "NativeMenuPathInput",
+          "outputType": "Promise<NativeMenuPathResult>",
+          "support": "established",
+          "constraints": [
+            "wsl-windows",
+            "explicit caller-owned assignment",
+            "Existing Host Runtime Adapter and borrowed headed Chrome browser",
+            "Browser-associated right-click through target-scoped CDP; no foreground activation required for this validated path"
+          ],
+          "observations": [
+            "Timestamped runtime incarnation, selected window and fresh CDP target identity",
+            "Target-scoped CDP right-click with fresh page geometry and retained DOM identity",
+            "Structured UIA menu roots and item ancestry, requested exact label path",
+            "State-aware ExpandCollapsePattern, unique separately rooted sibling-popup association, exact leaf revalidation and InvokePattern",
+            "Optional caller-assigned downstream browser observation correlated with action lifecycle"
+          ],
+          "limits": [
+            "Live proof is limited to the documented built-in Chrome menu path on Chrome for Testing 154.0.8037.92; other browser versions and arbitrary native desktop menus are unestablished",
+            "Missing or ambiguous labels, unrelated roots, stale elements, runtime/window loss and unsupported patterns fail closed",
+            "No coordinate semantic fallback, no direct extension handler invocation, no screenshot-only proof",
+            "Pattern completion proves native invocation only; product effect requires assigned outcome correlation",
+            "Only the browser-associated right-click initiation is live-established; other initiation modes remain unestablished"
+          ],
+          "effects": [
+            "assigned-target-title-binding",
+            "assigned-context-menu-input",
+            "assigned-native-invoke-or-expand"
+          ],
+          "ownership": "Borrowed Chrome/profile/browser; invocation-owned bridge and temporary CDP sessions only; caller owns target and cleanup",
+          "prerequisites": [
+            "Explicit runtime config, PowerShell and healthy current Host Runtime Adapter session",
+            "Exact unique browser target and native source window binding",
+            "Authorized user-equivalent context-menu input on assigned target",
+            "Unique visible enabled UIA menu path with supported Expand/Invoke patterns",
+            "Exclusive menu lifecycle without concurrent native input",
+            "Authorized temporary nonce title binding with restoration on the assigned page"
+          ],
+          "deadlineMs": 120000,
+          "evidenceRefs": [
+            "contracts/capability-evidence.md#native-menu",
+            "contracts/native-menu.md"
+          ]
         }
       ]
     },
     {
       "schemaVersion": 1,
       "id": "generic:host",
-      "version": "v0.1.0",
+      "version": "v0.2.0",
       "entry": "dist/runtime/index.js",
       "declarations": "dist/runtime/index.d.ts",
       "capabilities": [

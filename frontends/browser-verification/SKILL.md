@@ -64,6 +64,14 @@ The WSL wrapper `../../runtime/host/wsl-windows/native-ui` requires `BROWSER_VER
 
 Invocation/expansion requires an assigned action, a live unique element, enabled/visible state and the corresponding semantic pattern. Unsupported patterns, ambiguity, stale elements and errors stop the action. There is no automatic permission decision, menu navigation, extension workflow, pointer/coordinate fallback, center-hit or DPI workaround. Expansion proves only that the requested pattern call completed; its application meaning and expected effect come from scenario instructions.
 
+## Generic native menu path
+
+Import `nativeMenuPath` from `<distribution>/dist/runtime/index.js` for an explicitly assigned hierarchical context-menu interaction. Both frontends use this one Host Runtime Adapter/UIA implementation. Inspect `generic:native` / `native:menu` in the pinned descriptor and current readiness before generating a proof; unestablished support remains BLOCKED even when the implementation is callable for capability validation.
+
+For native-only menu assignments, use the existing platform fixture and ordinary Playwright runner with one borrowed attachment and the original Host Runtime Adapter session. The CLI sandbox cannot import Node host modules; it must not gain a duplicate driver or a copied menu interpreter. Resolve the exclusive attachment/cleanup boundary with the caller before switching from an existing CLI attachment.
+
+Supply the existing borrowed browser/page, current host session, exact source window and target, exact native labels, authorized context-menu input and optional downstream observation. Use fresh target/runtime/window binding, structured menu roots and ancestry, supported Expand/Invoke patterns and immediate retained-element revalidation. Separately rooted submenus must be uniquely tied to the current expansion lifecycle; unsupported or ambiguous structures fail closed. No coordinate semantic fallback or direct extension-handler invocation is allowed. Serialize the complete result as raw evidence through the shared recorder; invocation completion alone does not prove an application outcome. Preserve uncertainty after possible action; never replay automatically.
+
 ## Evidence, handoff and cleanup
 
 Prefer structured runtime/protocol/DOM/native evidence when it proves the claim. Use screenshots for observable properties that need visual evidence. Collect console, network or traces only for assigned claims/diagnosis. Unexpected observations are findings, not new tasks.

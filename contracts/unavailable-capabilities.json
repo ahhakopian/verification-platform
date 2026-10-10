@@ -7,11 +7,6 @@
       "reason": "Assigned dedicated worker Target.closeTarget rejected: Specified target doesn't support closing. No wake/reacquisition attempted; no assigned owned service-worker stop source. See contracts/capability-evidence.md#worker-interruption"
     },
     {
-      "capabilityId": "native:menu",
-      "support": "unestablished",
-      "reason": "Live check INCONCLUSIVE for eligible menu semantics: assigned exact owned element focus+ShiftF10 exposed no Menu/MenuItem in canonical Window tree or runtime-attributed desktop roots. Root shape/pattern/action remain unestablished, so affected claims cannot proceed; this is not global Chrome/UIA unavailability. See contracts/capability-evidence.md#native-menu"
-    },
-    {
       "capabilityId": "chrome:network-attribution",
       "support": "unavailable",
       "reason": "Only owned page CDP request source established. URL does not establish extension attribution; no authoritative extension observer supplied or complete worker-change coverage. See contracts/capability-evidence.md#network"

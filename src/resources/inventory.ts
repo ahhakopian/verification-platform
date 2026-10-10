@@ -15,7 +15,7 @@ const modules = [
  'runtime/index','runtime/fixtures','runtime/catalog','runtime/readiness',
  'runtime/reporter','runtime/invoke','runtime/evidence/records','runtime/evidence/reconcile','runtime/evidence/readiness',
  'runtime/cdp/index','runtime/cdp/target-observer','runtime/cdp/network-observer','runtime/cdp/worker','runtime/cdp/permission','runtime/cdp/geometry',
- 'runtime/host/wsl-windows/session','runtime/host/wsl-windows/process','runtime/host/wsl-windows/native',
+ 'runtime/host/wsl-windows/session','runtime/host/wsl-windows/process','runtime/host/wsl-windows/native','runtime/host/wsl-windows/native-menu',
  'src/contracts/index','src/compilation/bundle','src/compilation/coverage',
  'src/resources/resolve','src/resources/inventory','src/validation/schema',
  'src/validation/plan','src/validation/cli','src/validation/result','src/validation/result-cli',
