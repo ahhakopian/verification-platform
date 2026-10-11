@@ -14,6 +14,8 @@ test('reproducible coherent distribution relocates independently, offline identi
  const pkg=JSON.parse(readFileSync(join(relocated,'package.json')));for(const [name,version] of Object.entries(pkg.dependencies))assert.equal(JSON.parse(readFileSync(join(relocated,'node_modules',name,'package.json'))).version,version);for(const entry of Object.values(pkg.exports))await import(pathToFileURL(join(relocated,entry)).href);
  assert.deepEqual((await import(pathToFileURL(join(relocated,pkg.exports['./runtime'])).href)).descriptors,JSON.parse(readFileSync(join(relocated,'contracts/generic-descriptors.json'))).providers);
  assert.equal(verify(relocated,{binding}).resolved.resources.size,index.resources.length);
+ // Published installation and AI guidance must retain the canonical adoption contract.
+ for(const [published,source] of [['distribution/README.md','distribution/README.md'],['contracts/verification-integration.md','contracts/verification-integration.md'],['dist/frontends/verification-orchestrator/SKILL.md','frontends/verification-orchestrator/SKILL.md']])assert.equal(readFileSync(join(relocated,published),'utf8'),readFileSync(resolve(source),'utf8'));
  assert(statSync(join(relocated,'dist/runtime/host/wsl-windows/native-ui')).mode&0o111);
  for(const r of index.resources){const content=readFileSync(join(relocated,r.path),'utf8');assert(!content.includes('/home/art/'),r.path);assert(!r.path.includes('slice4-live'));assert(!r.path.includes('import-provenance'));}
  assert(readFileSync(join(relocated,'dist/frontends/browser-verification/SKILL.md'),'utf8').includes('<distribution>/dist/runtime/cdp/extension-action.cjs'));
