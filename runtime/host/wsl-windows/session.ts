@@ -61,7 +61,13 @@ export async function acquireSession(config:HostConfig):Promise<OwnedSession>{
  if(config.signal?.aborted)throw Error('Runtime acquisition cancelled before attempt');
  const script=fileURLToPath(new URL('./browser-session.py',import.meta.url));
  const child=spawn('python3',[script,'--config',config.runtimeConfig,'--powershell',config.powershell,'--readiness-ms',String(config.readinessMs),...(config.launch?['--launch']:[])],{stdio:'pipe'});
- let stdout='',stderr='',exited=false,exitCode:number|null=null;child.stderr.on('data',d=>stderr+=d);
+ let stdout='',stderr='',exited=false,exitCode:number|null=null;
+ const diagnosticLimit=65536;let diagnosticsTruncated=false;
+ child.stderr.on('data',d=>{
+  const text=String(d),remaining=diagnosticLimit-stderr.length;
+  if(remaining>0)stderr+=text.slice(0,remaining);
+  if(text.length>remaining&&!diagnosticsTruncated){stderr+='\n[Runtime stderr truncated at 65536 characters]\n';diagnosticsTruncated=true;}
+ });
  const exit=new Promise<void>(resolve=>child.once('close',code=>{exited=true;exitCode=code;resolve();}));
  let disposed:Promise<void>|undefined;
  const dispose=()=>disposed??=new Promise<void>((resolve,reject)=>{if(exited){resolve();return;}child.kill('SIGINT');const timer=setTimeout(()=>{child.kill('SIGKILL');},config.disposalMs);const hard=setTimeout(()=>reject(Error('Owned relay disposal deadline exceeded')),config.disposalMs+2000);exit.then(()=>{clearTimeout(timer);clearTimeout(hard);resolve();});});
@@ -83,7 +89,7 @@ export async function acquireSession(config:HostConfig):Promise<OwnedSession>{
   if(record.status!=='ok'||typeof record.cdp_endpoint!=='string'||!record.process_id||!record.started_at||!record.webSocketDebuggerUrl)throw Error('Invalid runtime readiness observation: '+JSON.stringify(record));
   return {endpoint:record.cdp_endpoint,provenance:record,dispose,async revalidate(){
     if(exited)throw Error('Owned relay lost');
-    const query=await boundedProcess('python3',['-c','import importlib.util,json,sys; spec=importlib.util.spec_from_file_location("browser_session",sys.argv[1]); module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module); w=module.Windows(sys.argv[2],sys.argv[3]); print(json.dumps(w.snapshot()))',script,config.runtimeConfig,config.powershell],config.readinessMs,false,config.signal);
+    const query=await boundedProcess('python3',['-c','import importlib.util,json,sys; spec=importlib.util.spec_from_file_location("browser_session",sys.argv[1]); module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module); w=module.Windows(sys.argv[2],sys.argv[3]); print(json.dumps(w.revalidate(json.loads(sys.argv[4]))))',script,config.runtimeConfig,config.powershell,JSON.stringify(record)],config.readinessMs,false,config.signal);
     if(query.exitCode!==0||query.timedOut)throw Error('Runtime revalidation failed: '+query.stderr);
     const current=JSON.parse(query.stdout);
     for(const key of ['process_id','started_at','webSocketDebuggerUrl'])if(current[key]!==record[key])throw Error('Runtime incarnation changed');

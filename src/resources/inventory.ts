@@ -13,15 +13,17 @@ export const publicEntries = {
 } as const;
 const modules = [
  'runtime/index','runtime/preflight','runtime/fixtures','runtime/catalog','runtime/readiness',
- 'runtime/reporter','runtime/invoke','runtime/evidence/records','runtime/evidence/reconcile','runtime/evidence/readiness',
+ 'runtime/reporter','runtime/invoke','runtime/adoption-readiness','runtime/adoption-self-check','runtime/evidence/records','runtime/evidence/reconcile','runtime/evidence/readiness',
  'runtime/cdp/index','runtime/cdp/target-observer','runtime/cdp/network-observer','runtime/cdp/worker','runtime/cdp/permission','runtime/cdp/geometry',
  'runtime/host/wsl-windows/session','runtime/host/wsl-windows/process','runtime/host/wsl-windows/native','runtime/host/wsl-windows/native-menu',
  'src/contracts/index','src/compilation/bundle','src/compilation/coverage',
  'src/resources/resolve','src/resources/inventory','src/validation/schema',
  'src/validation/plan','src/validation/cli','src/validation/result','src/validation/result-cli',
- 'frontends/browser-verification/result-adapter'
+ 'frontends/browser-verification/result-adapter','frontends/verification-orchestrator/adoption'
 ];
 const assets = [
+ 'runtime/assets/adoption-hook-canary.mjs',
+ 'frontends/verification-orchestrator/assets/installation-adoption.md',
  'runtime/cdp/extension-action.cjs','runtime/cdp/extension-action.d.cts',
  'runtime/host/wsl-windows/browser-runtime.ps1','runtime/host/wsl-windows/browser-session.py',
  'runtime/host/wsl-windows/native-ui.ps1','runtime/host/wsl-windows/native-ui',

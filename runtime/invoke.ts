@@ -8,6 +8,10 @@ import {validateCoverage} from '../src/compilation/coverage.js';
 import {validateSchema} from '../src/validation/schema.js';
 import {sha256} from '../src/resources/resolve.js';
 import {collectPreflight,preflightBlockerClaims,persistPreflightClaims,readablePreflight} from './evidence/readiness.js';
+export {invokeReadiness,recordReadinessConfiguration} from './adoption-readiness.js';
+export type {ReadinessRequest,PreparedReadiness,ReadinessSummary} from './adoption-readiness.js';
+export * from '../frontends/verification-orchestrator/adoption.js';
+export {installedHookSelfCheck} from './adoption-self-check.js';
 export async function invokePlaywright(input:Omit<Reconciliation,'records'|'evidence'|'runner'> & {runnerEntry:string;config:string;resultPath:string;cwd:string}){
  const errors=validateCoverage(input.plan,input.assignment,input.manifest);
  if(errors.length||input.identity.generatedSourceDigest!==sourceDigest(input.cwd,input.manifest.entries.filter(e=>!e.blocker).map(e=>e.source!)))throw Error('Current bundle identity/coverage mismatch: '+errors.join('; '));

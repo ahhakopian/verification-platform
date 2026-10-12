@@ -5,8 +5,11 @@ browser state is deleted, and no browser WebSocket URL is persisted.
 """
 
 import argparse
+from contextlib import contextmanager
+from datetime import datetime, timezone
 import http.client
 import json
+import os
 from pathlib import Path, PureWindowsPath
 import socket
 import socketserver
@@ -15,6 +18,75 @@ import sys
 import threading
 import time
 from urllib.parse import urlsplit
+
+
+# One bounded stderr stream; stdout remains exclusively the readiness protocol.
+DIAGNOSTIC_LIMIT = 65536
+_diagnostic_bytes = 0
+_diagnostic_lock = threading.Lock()
+
+
+def diagnostic(phase, event, **fields):
+    global _diagnostic_bytes
+    with _diagnostic_lock:
+        if _diagnostic_bytes >= DIAGNOSTIC_LIMIT:
+            return
+        line = json.dumps({"diagnostic": "chrome-transport", "source": "python", "pid": os.getpid(),
+                           "timestamp": datetime.now(timezone.utc).isoformat(),
+                           "phase": phase, "event": event, **fields}) + "\n"
+        encoded = line.encode()
+        if _diagnostic_bytes + len(encoded) > DIAGNOSTIC_LIMIT:
+            line = '{"diagnostic":"chrome-transport","event":"diagnostics-truncated"}\n'
+            _diagnostic_bytes = DIAGNOSTIC_LIMIT
+        else:
+            _diagnostic_bytes += len(encoded)
+        try:
+            sys.stderr.write(line)
+            sys.stderr.flush()
+        except (OSError, ValueError):
+            pass  # Diagnostics never change transport outcomes.
+
+
+@contextmanager
+def diagnostic_phase(name, **fields):
+    start = time.monotonic()
+    diagnostic(name, "start", **fields)
+    outcome = "interrupted"
+    try:
+        yield
+        outcome = "ok"
+    finally:
+        diagnostic(name, "end", duration_ms=round((time.monotonic() - start) * 1000, 3),
+                   outcome=outcome, **fields)
+
+
+def drain_stderr(stream, source, captured=None):
+    try:
+        while data := stream.read1(4096):
+            if captured is not None:
+                remaining = 16384 - len(captured)
+                captured.extend(data[:max(0, remaining)])
+            diagnostic(source, "stderr", text=data.decode("utf-8", errors="replace"))
+    except (OSError, ValueError):
+        pass
+
+
+@contextmanager
+def inspection_stderr():
+    # Redirect run's stderr to a drained pipe so intermediate phases survive timeout.
+    read_fd, write_fd = os.pipe()
+    captured = bytearray()
+    def drain():
+        with os.fdopen(read_fd, "rb") as reader:
+            drain_stderr(reader, "powershell-inspection", captured)
+    thread = threading.Thread(target=drain, daemon=True)
+    thread.start()
+    with os.fdopen(write_fd, "wb") as writer:
+        try:
+            yield writer, captured
+        finally:
+            writer.close()
+            thread.join(timeout=0.1)
 
 
 def validate_config(config):
@@ -96,20 +168,37 @@ class Windows:
             raise Blocked(f"Runtime readiness deadline exhausted before {phase}.")
         return remaining
 
-    def snapshot(self, launch=False):
+    def expected_arguments(self, record):
+        validate_snapshot(record, self.config)
+        return ["-ExpectedProcessId", str(record["process_id"]), "-ExpectedStartedAt", record["started_at"],
+                "-ExpectedWebSocket", record["webSocketDebuggerUrl"], "-ExpectedBinary", record["binary"],
+                "-ExpectedProfile", record["profile"], "-ExpectedVersion", record["version"]]
+
+    def revalidate(self, record):
+        return self.snapshot(expected=record)
+
+    def snapshot(self, launch=False, expected=None):
         timeout = min(30, self.startup_timeout(30, "Windows runtime inspection"))
-        result = subprocess.run(self.command("ensure" if launch else "inspect"), capture_output=True, text=True, timeout=timeout)
-        try:
-            record = json.loads(result.stdout.lstrip("\ufeff"))
-        except ValueError as exc:
-            raise Blocked("Windows browser inspection failed: " + result.stderr.strip()) from exc
-        return validate_snapshot(record, self.config)
+        operation = "revalidate" if expected is not None else "ensure" if launch else "inspect"
+        arguments = self.expected_arguments(expected) if expected is not None else []
+        phase = "python-windows-revalidation" if expected is not None else "python-windows-inspection"
+        with diagnostic_phase(phase, launch=launch):
+            with inspection_stderr() as (stderr, captured):
+                result = subprocess.run(self.command(operation) + arguments, stdout=subprocess.PIPE,
+                                        stderr=stderr, text=True, timeout=timeout)
+            try:
+                record = json.loads(result.stdout.lstrip("\ufeff"))
+            except ValueError as exc:
+                raise Blocked("Windows browser inspection failed: " + (result.stderr or captured.decode(errors="replace")).strip()) from exc
+            validate_snapshot(record, self.config)
+            if expected is not None and (incarnation(record) != incarnation(expected) or record["version"] != expected["version"]):
+                raise Blocked("Browser discovery/process changed during runtime revalidation.")
+            return record
 
     def stream(self, record):
-        return subprocess.Popen(self.command("relay") + [
-            "-ExpectedProcessId", str(record["process_id"]), "-ExpectedStartedAt", record["started_at"],
-            "-ExpectedWebSocket", record["webSocketDebuggerUrl"]],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        with diagnostic_phase("powershell-relay-spawn"):
+            return subprocess.Popen(self.command("relay") + self.expected_arguments(record),
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     def closed_baseline(self):
         result = subprocess.run(self.command("baseline"), capture_output=True, text=True,
@@ -141,10 +230,11 @@ class Pipe(socketserver.BaseRequestHandler):
     def handle(self):
         child = None
         try:
-            current = validate_snapshot(self.server.windows.snapshot(), self.server.windows.config)
-            if incarnation(current) != incarnation(self.server.record):
-                raise Blocked("Browser restarted; this relay cannot reuse an earlier WebSocket endpoint.")
-            child = self.server.windows.stream(current)
+            # The Windows relay checks this established identity immediately
+            # before opening TCP; another Python full discovery adds no authority.
+            child = self.server.windows.stream(self.server.record)
+            errors = threading.Thread(target=drain_stderr, args=(child.stderr, "powershell-relay"), daemon=True)
+            errors.start()
             with self.server.lock:
                 self.server.active.add(child)
 
@@ -170,6 +260,7 @@ class Pipe(socketserver.BaseRequestHandler):
             if child:
                 child.terminate()
                 child.wait(timeout=5)
+                errors.join(timeout=0.1)
                 with self.server.lock:
                     self.server.active.discard(child)
                 for stream in (child.stdin, child.stdout, child.stderr):
@@ -181,6 +272,11 @@ class Pipe(socketserver.BaseRequestHandler):
 
 
 def discover_transport(server):
+    with diagnostic_phase("json-version-forwarding"):
+        return _discover_transport(server)
+
+
+def _discover_transport(server):
     # Prove that the WSL transport reaches the same current Windows discovery.
     connection = http.client.HTTPConnection(*server.server_address, timeout=server.windows.startup_timeout(15, "WSL relay /json/version discovery"))
     try:
@@ -203,7 +299,7 @@ def discover_transport(server):
         connection.close()
     if (discovery.get("Browser") != "Chrome/" + server.record["version"] or
             discovery.get("webSocketDebuggerUrl") != server.record["webSocketDebuggerUrl"] or
-            incarnation(validate_snapshot(server.windows.snapshot(), server.windows.config)) != incarnation(server.record)):
+            incarnation(validate_snapshot(server.windows.revalidate(server.record), server.windows.config)) != incarnation(server.record)):
         raise Blocked("Browser discovery/process changed during transport validation.")
     path = urlsplit(discovery["webSocketDebuggerUrl"]).path
     return f"ws://127.0.0.1:{server.server_address[1]}{path}"
@@ -221,14 +317,16 @@ def main():
     deadline = None if args.readiness_ms is None else time.monotonic() + args.readiness_ms / 1000
     server = None
     try:
-        windows = Windows(args.config, args.powershell)
+        with diagnostic_phase("python-runtime-initialization"):
+            windows = Windows(args.config, args.powershell)
         windows.readiness_deadline = deadline
         record = windows.snapshot(launch=args.launch)
         server = Relay(windows, record)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         endpoint = discover_transport(server)
         windows.readiness_deadline = None  # Later connections retain their independent validation bound.
-        print(json.dumps({**record, "cdp_endpoint": endpoint, "transport": f"WSL loopback -> Windows stdio TCP relay -> 127.0.0.1:{windows.config['debugPort']}"}), flush=True)
+        with diagnostic_phase("readiness-emission"):
+            print(json.dumps({**record, "cdp_endpoint": endpoint, "transport": f"WSL loopback -> Windows stdio TCP relay -> 127.0.0.1:{windows.config['debugPort']}"}), flush=True)
         threading.Event().wait()
     except KeyboardInterrupt:
         return 0

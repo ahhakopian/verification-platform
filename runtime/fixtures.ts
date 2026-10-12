@@ -6,6 +6,9 @@ import {recordReadinessFailure,PreflightRecorder} from './evidence/readiness.js'
 import {browserPreflight,projectPreflight,targetPreflight,environmentReady as completeEnvironmentReady,type PreflightOptions,type BrowserEnvironment} from './preflight.js';
 import {sha256} from '../src/resources/resolve.js';
 import {isAbsolute} from 'node:path';
+import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+import {join,resolve} from 'node:path';
+import {validateReadinessSelection} from './adoption-readiness.js';
 import {validateSchema} from '../src/validation/schema.js';
 export {expect};
 export interface RuntimeOptions {hostConfig:HostConfig;pageUrl:string;executionIdentity:ExecutionIdentity;preflight:PreflightOptions}
@@ -20,7 +23,13 @@ export const test=base.extend<{assignedPage:Page;evidence:EvidenceRecorder;envir
  preflightRecorder:[async({preflight,executionIdentity,hostConfig,pageUrl},use,workerInfo)=>{
   try{
    if(!preflight||!executionIdentity)throw Error('Explicit preflight configuration and execution identity required');
-   if(validateSchema('assignment',preflight.assignment).length||validateSchema('browser-verification-plan',JSON.parse(preflight.planBytes)).length||sha256(preflight.planBytes)!==executionIdentity.planDigest||!isAbsolute(preflight.projectRoot)||validateSchema('coverage-manifest',preflight.manifest).length||JSON.stringify(preflight.manifest.identity)!==JSON.stringify(executionIdentity)||sha256(JSON.stringify(preflight.assignment))!==executionIdentity.assignmentDigest)throw Error('Current preflight assignment/plan/manifest required');
+   if(validateSchema('assignment',preflight.assignment).length||validateSchema('browser-verification-plan',JSON.parse(preflight.planBytes)).length||sha256(preflight.planBytes)!==executionIdentity.planDigest||!isAbsolute(preflight.projectRoot)||sha256(JSON.stringify(preflight.assignment))!==executionIdentity.assignmentDigest)throw Error('Current preflight assignment/plan/manifest required');
+   if(preflight.readiness){
+    validateReadinessSelection(preflight);
+    if(sha256(readFileSync(resolve(preflight.projectRoot,preflight.assignment.fixtureEntry)))!==executionIdentity.fixtureDigest)throw Error('Current readiness fixture bytes mismatch');
+    mkdirSync(workerInfo.project.outputDir,{recursive:true});
+    writeFileSync(join(workerInfo.project.outputDir,'readiness-fixture.json'),JSON.stringify({identity:executionIdentity,selection:preflight.readiness}),{flag:'wx'});
+   }else if(validateSchema('coverage-manifest',preflight.manifest).length||JSON.stringify(preflight.manifest.identity)!==JSON.stringify(executionIdentity))throw Error('Current preflight assignment/plan/manifest required');
    const environments=preflight.assignment.environments.filter(e=>e.id===preflight.environmentId);
    if(environments.length!==1||environments[0].runtimeConfig!==hostConfig?.runtimeConfig||environments[0].powershell!==hostConfig.powershell||environments[0].launch!==hostConfig.launch||environments[0].selection.pageUrl!==pageUrl)throw Error('Preflight configuration differs from current assigned runtime/target');
    if(preflight.assignment.planDigest!==executionIdentity.planDigest||preflight.assignment.bindingDigest!==executionIdentity.bindingDigest||preflight.assignment.authorization.planDigest!==executionIdentity.planDigest||preflight.assignment.authorization.bindingDigest!==executionIdentity.bindingDigest)throw Error('Preflight authorization identity mismatch');
@@ -42,7 +51,8 @@ export const test=base.extend<{assignedPage:Page;evidence:EvidenceRecorder;envir
  assignedPage:async({assignedBrowser,browserEnvironment,preflightRecorder,preflight,pageUrl,hostConfig},use,testInfo)=>{
   const keys=testInfo.annotations.filter(a=>a.type==='testKey').map(a=>a.description);
   if(keys.length!==1||!keys[0]){await preflightRecorder.blocked('target','Explicit unique proof testKey required');throw Error('Explicit unique proof testKey required');}
-  const claimIds=preflight.manifest.entries.filter(e=>e.testKey===keys[0]&&e.environmentId===preflight.environmentId).map(e=>e.claimId);
+  if(preflight.readiness&&keys[0]!==preflight.readiness.testKey)throw Error('Readiness probe testKey mismatch');
+  const claimIds=preflight.readiness?preflight.readiness.claimIds:preflight.manifest.entries.filter(e=>e.testKey===keys[0]&&e.environmentId===preflight.environmentId).map(e=>e.claimId);
   if(!claimIds.length){await preflightRecorder.blocked('target','Current mapped proof obligations required',keys[0]);throw Error('Current mapped proof obligations required');}
   const started=Date.now();
   const target=await targetPreflight({...browserEnvironment,browser:assignedBrowser},preflightRecorder,{pageUrl,deadlineMs:hostConfig.readinessMs,assignment:preflight.assignment,planBytes:preflight.planBytes,claimIds,testKey:keys[0],signal:hostConfig.signal});
@@ -54,5 +64,5 @@ export const test=base.extend<{assignedPage:Page;evidence:EvidenceRecorder;envir
   // only to an explicitly assigned baseline reset or overall session termination.
  },
  environmentReady:[async({assignedPage},use)=>{await use();},{auto:true}],
- evidence:async({executionIdentity,assignedPage},use,testInfo)=>{if(!executionIdentity)throw Error('Execution identity required');await use(new EvidenceRecorder(testInfo,executionIdentity));}
+ evidence:async({executionIdentity,assignedPage,preflight},use,testInfo)=>{if(preflight.readiness)throw Error('Product evidence is unavailable during readiness-only invocation');if(!executionIdentity)throw Error('Execution identity required');await use(new EvidenceRecorder(testInfo,executionIdentity));}
 });

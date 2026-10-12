@@ -11,7 +11,10 @@ import type {OwnedSession,BrowserProvenance,ProjectPreflightHookReference,Projec
 export type {ProjectPreflightHookReference,ProjectPreflightContext,ProjectPreflightResult,PreflightRecord} from '../src/contracts/index.js';
 export {PreflightRecorder} from './evidence/readiness.js';
 
-export interface PreflightOptions {projectRoot:string;environmentId:string;assignment:Assignment;planBytes:string;manifest:Manifest;projectPreflightHook?:ProjectPreflightHookReference}
+export interface HookDecision {state:'HookRequired'|'HookNotRequired'|'Unresolved';rationale:string;sourceRefs:string[];inputFingerprint:string}
+export interface ReadinessSelection {testKey:string;claimIds:string[];hookDecision:HookDecision;configurationFingerprint:string}
+interface PreflightBase {projectRoot:string;environmentId:string;assignment:Assignment;planBytes:string;projectPreflightHook?:ProjectPreflightHookReference}
+export type PreflightOptions = PreflightBase & ({manifest:Manifest;readiness?:never}|{manifest?:never;readiness:ReadinessSelection});
 export interface BrowserEnvironment {browser:Browser;session:OwnedSession;provenance:BrowserProvenance}
 
 // Bounded setup only. This never retries or replaces an attachment after READY.

@@ -1,7 +1,8 @@
 import {randomUUID} from 'node:crypto';
 import type {Locator, Page, CDPSession} from '@playwright/test';
+import type {DeadlineEvidence} from './process.js';
 import type {OwnedSession} from '../../../src/contracts/index.js';
-import {nativeOperation, type NativeMenuRequest, type NativeMenuAssociation, type NativeOperationInput, type NativeOperationObservation} from './native.js';
+import {nativeMenuOperation, nativeMenuDeadlineMs, type NativeMenuRequest, type NativeMenuAssociation, type NativeOperationInput, type NativeOperationObservation} from './native.js';
 export interface NativeMenuCorrelation {
  /** Observations run on the borrowed page. The caller supplies the expected effect and its evidence source. */
  source:string;
@@ -12,6 +13,7 @@ export interface NativeMenuPathInput {
  /** Borrowed page/locator; caller authorizes a temporary title nonce, restored in the same document. */
  page:Page; source:Locator; path:string[]; hostSession:OwnedSession;
  host:Pick<NativeOperationInput,'powershell'|'runtimeConfig'>;
+ /** External execution watchdog; the catalog owns the semantic deadline. */
  deadlineMs:number; cleanupMs?:number; signal?:AbortSignal; initiation:'right-click'|'keyboard';
  correlation?:NativeMenuCorrelation;
 }
@@ -21,7 +23,7 @@ export interface NativeMenuPathResult {
  observations:NativeOperationObservation[]; cleanupErrors:string[]; detail?:string;
  correlation?:{source:string;before:unknown;after?:unknown;beforeAt:string;afterAt?:string;matched?:boolean};
  initiationEvidence?:{method:string;targetId:string;domIdentity:{backendNodeId:number;documentToken:string};identityConfirmed:boolean;events:Array<{type:'mousePressed'|'mouseReleased';button:'right';buttons:number;clickCount:number;x:number;y:number;sentAt?:string;acknowledgedAt?:string}>;box:{x:number;y:number;width:number;height:number};coordinates:{x:number;y:number};observedAt:string};
- limits:string[];
+ limits:string[]; timeout?:DeadlineEvidence; interruptedPhase?:string; interruptedOperation?:NativeOperationInput['operation'];
 }
 interface NodeInfo {name:string;runtimeId:number[];patterns:string[]}
 function info(value:unknown):NodeInfo {
@@ -37,19 +39,38 @@ function data(result:NativeOperationObservation):unknown {
 /** A supported semantic invocation proves interaction; optional correlated browser evidence establishes only the caller's specified outcome. */
 export async function nativeMenuPath(input:NativeMenuPathInput):Promise<NativeMenuPathResult>{
  const result:NativeMenuPathResult={status:'blocked',verdict:'BLOCKED',phase:'binding',attempted:false,lifecycleId:randomUUID(),startedAt:new Date().toISOString(),finishedAt:'',path:[...input.path],observations:[],cleanupErrors:[],limits:['UIA invocation alone does not establish Chrome callback data or product outcome','Separate popup attribution requires UIA ancestry or native HWND owner relationship, expanded parent and unique live popup','Live support is limited to the documented Chrome for Testing 154.0.8037.92 browser-associated right-click path; arbitrary native menus and other versions remain unestablished']};
- const deadline=performance.now()+input.deadlineMs;
- const remaining=()=>{const ms=deadline-performance.now();if(ms<=0||input.signal?.aborted||input.page.isClosed())throw Error('Native menu deadline, cancellation or source-page loss');return ms;};
+ const started=performance.now(),deadline=started+nativeMenuDeadlineMs,watchdogDeadline=started+input.deadlineMs;
+ const controller=new AbortController();let watchdogTimer:ReturnType<typeof setTimeout>|undefined;
+ const timeout=(role:DeadlineEvidence['role'],source:string,deadlineMs:number,trigger:DeadlineEvidence['trigger']='deadline')=>{
+  result.timeout={role,source,deadlineMs,elapsedMs:performance.now()-started,trigger};
+  return Error(role==='watchdog'?'External native-menu watchdog interrupted verification':'Platform native:menu deadline exceeded');
+ };
+ const cancel=()=>controller.abort();
+ const remaining=()=>{
+  if(controller.signal.aborted||input.signal?.aborted||performance.now()>=watchdogDeadline)throw timeout('watchdog',input.signal?.aborted?'NativeMenuPathInput.signal':'NativeMenuPathInput.deadlineMs',input.deadlineMs,input.signal?.aborted?'cancellation':'deadline');
+  const ms=deadline-performance.now();if(ms<=0)throw timeout('platform-semantic','contracts/generic-descriptors.json#native:menu',nativeMenuDeadlineMs);
+  if(input.page.isClosed())throw Error('Native menu source-page loss');return ms;
+ };
  async function bounded<T>(operation:()=>Promise<T>):Promise<T>{
-  const ms=remaining();let timer:ReturnType<typeof setTimeout>|undefined;let cancel:(()=>void)|undefined;
-  try{return await Promise.race([operation(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(Error('Native menu deadline exceeded')),ms);cancel=()=>reject(Error('Native menu cancelled'));input.signal?.addEventListener('abort',cancel,{once:true});})]);}
-  finally{if(timer)clearTimeout(timer);if(cancel)input.signal?.removeEventListener('abort',cancel);}
+  const semanticMs=remaining(),watchdogMs=watchdogDeadline-performance.now(),watchdog=watchdogMs<semanticMs,ms=Math.min(semanticMs,watchdogMs);let timer:ReturnType<typeof setTimeout>|undefined;let cancel:(()=>void)|undefined;
+  try{return await Promise.race([operation(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(watchdog?timeout('watchdog','NativeMenuPathInput.deadlineMs',input.deadlineMs):timeout('platform-semantic','contracts/generic-descriptors.json#native:menu',nativeMenuDeadlineMs)),ms);cancel=()=>reject(timeout('watchdog',input.signal?.aborted?'NativeMenuPathInput.signal':'NativeMenuPathInput.deadlineMs',input.deadlineMs,input.signal?.aborted?'cancellation':'deadline'));controller.signal.addEventListener('abort',cancel,{once:true});})]);}
+  finally{if(timer)clearTimeout(timer);if(cancel)controller.signal.removeEventListener('abort',cancel);}
  }
  let session:CDPSession|undefined;let originalTitle:string|undefined;let documentToken:string|undefined;
  const nonce='vp-menu-'+result.lifecycleId;let uncertainInput=false;
  const continuity=async()=>{await bounded(()=>input.hostSession.revalidate());if(!session)throw Error('Source CDP session missing');const live=await bounded(()=>session!.send('Target.getTargetInfo'));if(live.targetInfo.targetId!==result.targetId)throw Error('Browser source target changed');};
- const call=async(operation:NativeOperationInput['operation'],menu:NativeMenuRequest)=>{remaining();const observation=await nativeOperation({...input.host,operation,menu,deadlineMs:remaining(),signal:input.signal});result.observations.push(observation);if(observation.attempted)result.attempted=true;if(observation.uncertain){result.status='uncertain';result.verdict='INCONCLUSIVE';}return data(observation);};
+ let activeOperation:NativeOperationInput['operation']|undefined;
+ const call=async(operation:NativeOperationInput['operation'],menu:NativeMenuRequest)=>{
+  activeOperation=operation;remaining();const observation=await nativeMenuOperation({...input.host,operation,menu,deadlineMs:nativeMenuDeadlineMs,signal:controller.signal},remaining());
+  result.observations.push(observation);if(observation.attempted)result.attempted=true;
+  if(observation.uncertain){result.status='uncertain';result.verdict='INCONCLUSIVE';}
+  if(observation.category==='watchdog')throw timeout('watchdog',input.signal?.aborted?'NativeMenuPathInput.signal':'NativeMenuPathInput.deadlineMs',input.deadlineMs,input.signal?.aborted?'cancellation':'deadline');
+  if(observation.category==='timeout')throw timeout('platform-semantic','contracts/generic-descriptors.json#native:menu',nativeMenuDeadlineMs);
+  const value=data(observation);activeOperation=undefined;return value;
+ };
  try {
   if(!Number.isFinite(input.deadlineMs)||input.deadlineMs<=0||!input.path.length||input.path.some(label=>typeof label!=='string'||!label))throw Error('Positive bounded deadline and nonempty exact menu labels required');
+  watchdogTimer=setTimeout(()=>controller.abort(),input.deadlineMs);input.signal?.addEventListener('abort',cancel,{once:true});if(input.signal?.aborted)controller.abort();
   if(!['right-click','keyboard'].includes(input.initiation))throw Error('Explicit supported menu initiation required');
   if(input.correlation&&(!input.correlation.source||typeof input.correlation.observe!=='function'||typeof input.correlation.matches!=='function'))throw Error('Correlation requires a named browser evidence source and observation/match functions');
   if(input.source.page()!==input.page)throw Error('Menu source locator belongs to another page');
@@ -119,8 +140,10 @@ export async function nativeMenuPath(input:NativeMenuPathInput):Promise<NativeMe
   if(input.correlation){const after=await bounded(()=>input.correlation!.observe(input.page));await continuity();const record=result.correlation!;record.after=after;record.afterAt=new Date().toISOString();record.matched=input.correlation.matches(record.before,after);result.verdict=record.matched?'PASS':'FAIL';}
   else result.verdict='PASS';
   result.status='invoked';
- }catch(error){result.detail=error instanceof Error?error.message:String(error);if(uncertainInput||(result.phase==='outcome'&&result.attempted)){result.status='uncertain';result.verdict='INCONCLUSIVE';}}
+ }catch(error){if(!result.timeout&&controller.signal.aborted)timeout('watchdog',input.signal?.aborted?'NativeMenuPathInput.signal':'NativeMenuPathInput.deadlineMs',input.deadlineMs,input.signal?.aborted?'cancellation':'deadline');result.detail=error instanceof Error?error.message:String(error);if(result.timeout?.role==='watchdog'){result.interruptedPhase=result.phase;result.interruptedOperation=activeOperation;result.phase='watchdog';result.status='uncertain';result.verdict='INCONCLUSIVE';}
+  else if(uncertainInput||(result.phase==='outcome'&&result.attempted)){result.status='uncertain';result.verdict='INCONCLUSIVE';}}
  finally {
+  if(watchdogTimer)clearTimeout(watchdogTimer);input.signal?.removeEventListener('abort',cancel);
   // Cleanup has its own bounded budget, including after cancellation/action expiry.
   const cleanupDeadline=performance.now()+(input.cleanupMs??5000);
   async function cleanup(operation:()=>Promise<unknown>){let timer:ReturnType<typeof setTimeout>|undefined;try{const ms=cleanupDeadline-performance.now();if(ms<=0)throw Error('Native menu cleanup deadline exceeded');await Promise.race([operation(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(Error('Native menu cleanup deadline exceeded')),ms);})]);}finally{if(timer)clearTimeout(timer);}}

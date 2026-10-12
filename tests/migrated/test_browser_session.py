@@ -55,6 +55,7 @@ class FixtureWindows(runtime.Windows):
         self.config = CONFIG
         self.record = record()
         self.calls = 0
+        self.revalidations = 0
         self.streams = []
         self.target = socketserver.ThreadingTCPServer(("127.0.0.1", 0), Target)
         self.target.daemon_threads = True
@@ -65,7 +66,14 @@ class FixtureWindows(runtime.Windows):
         self.calls += 1
         return dict(self.record)
 
+    def revalidate(self, expected):
+        self.revalidations += 1
+        return dict(self.record)
+
     def stream(self, current):
+        runtime.validate_snapshot(self.record, self.config)
+        if runtime.incarnation(current) != runtime.incarnation(self.record):
+            raise runtime.Blocked('Fixture Windows relay incarnation changed')
         self.streams.append(current)
         # Exercise the actual WSL relay's subprocess pipe path with a local TCP
         # byte forwarder standing in for the Windows stdio process.
@@ -85,6 +93,88 @@ while data:=s.recv(65536):
 
 
 class BrowserSessionTests(unittest.TestCase):
+    def test_diagnostics_stream_inspection_stderr_before_completion_and_keep_stdout_protocol(self):
+        windows = object.__new__(runtime.Windows)
+        windows.config = CONFIG
+        windows.config_path, windows.powershell, windows.script = "fixture", "fixture", "fixture"
+        received = threading.Event()
+        original = runtime.diagnostic
+        def diagnostic(phase, event, **fields):
+            original(phase, event, **fields)
+            if event == "stderr":
+                received.set()
+        def inspect(*args, **kwargs):
+            kwargs["stderr"].write(b'PowerShell fixture inspection started\n')
+            kwargs["stderr"].flush()
+            self.assertTrue(received.wait(2), "inspection stderr must arrive before run returns")
+            return subprocess.CompletedProcess([], 0, json.dumps(record()), None)
+        with contextlib.redirect_stderr(io.StringIO()) as errors, patch.object(runtime, "_diagnostic_bytes", 0), \
+                patch.object(runtime, "diagnostic", side_effect=diagnostic), patch.object(runtime.subprocess, "run", side_effect=inspect):
+            self.assertEqual(windows.snapshot(), record())
+        lines = [json.loads(line) for line in errors.getvalue().splitlines()]
+        self.assertEqual(lines[0]["event"], "start")
+        self.assertIn("PowerShell fixture inspection started", lines[1]["text"])
+        self.assertEqual(lines[-1]["event"], "end")
+        self.assertEqual(lines[-1]["outcome"], "ok")
+        self.assertGreaterEqual(lines[-1]["duration_ms"], 0)
+        self.assertTrue(all("timestamp" in line for line in lines))
+
+    def test_diagnostics_keep_timeout_failure_and_inspection_phase_duration(self):
+        windows = object.__new__(runtime.Windows)
+        windows.config = CONFIG
+        windows.config_path, windows.powershell, windows.script = "fixture", "fixture", "fixture"
+        failure = subprocess.TimeoutExpired("fixture", 30)
+        with contextlib.redirect_stderr(io.StringIO()) as errors, patch.object(runtime, "_diagnostic_bytes", 0), \
+                patch.object(runtime.subprocess, "run", side_effect=failure):
+            with self.assertRaises(subprocess.TimeoutExpired) as raised:
+                windows.snapshot()
+        self.assertIs(raised.exception, failure)
+        end = json.loads(errors.getvalue().splitlines()[-1])
+        self.assertEqual(end["phase"], "python-windows-inspection")
+        self.assertEqual(end["outcome"], "interrupted")
+        self.assertIn("duration_ms", end)
+
+    def test_diagnostics_drain_relay_stderr_past_pipe_capacity_with_bounded_output(self):
+        child = subprocess.Popen([sys.executable, "-c", "import sys;sys.stderr.buffer.write(b'fixture-relay-error\\n'+b'x'*200000);sys.stderr.flush()"],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        captured = bytearray()
+        with contextlib.redirect_stderr(io.StringIO()) as errors, patch.object(runtime, "_diagnostic_bytes", 0):
+            thread = threading.Thread(target=runtime.drain_stderr, args=(child.stderr, "powershell-relay", captured))
+            thread.start()
+            self.assertEqual(child.wait(timeout=5), 0)
+            thread.join(timeout=2)
+            self.assertFalse(thread.is_alive())
+            self.assertIn('fixture-relay-error', errors.getvalue())
+            self.assertIn('diagnostics-truncated', errors.getvalue())
+            self.assertLessEqual(len(errors.getvalue().encode()), runtime.DIAGNOSTIC_LIMIT + 100)
+        self.assertEqual(len(captured), 16384)
+        child.stdout.close()
+        child.stderr.close()
+
+    def test_diagnostics_forward_actual_relay_child_stderr_and_preserve_discovery(self):
+        windows = FixtureWindows()
+        relay = runtime.Relay(windows, windows.snapshot())
+        threading.Thread(target=relay.serve_forever, daemon=True).start()
+        spawn = runtime.subprocess.Popen
+        def noisy_spawn(args, **kwargs):
+            args = list(args)
+            args[2] = args[2].replace("s=socket", "sys.stderr.write('fixture-relay-phase\\n');sys.stderr.flush()\ns=socket")
+            return spawn(args, **kwargs)
+        with contextlib.redirect_stderr(io.StringIO()) as errors, patch.object(runtime, "_diagnostic_bytes", 0), \
+                patch.object(runtime.subprocess, "Popen", side_effect=noisy_spawn):
+            try:
+                self.assertTrue(runtime.discover_transport(relay).endswith('/devtools/browser/current'))
+            finally:
+                relay.shutdown()
+                relay.server_close()
+                windows.target.shutdown()
+                windows.target.server_close()
+        events = [json.loads(line) for line in errors.getvalue().splitlines()]
+        self.assertTrue(any(e.get('phase') == 'powershell-relay' and 'fixture-relay-phase' in e.get('text', '') for e in events))
+        forwarding = [e for e in events if e.get('phase') == 'json-version-forwarding']
+        self.assertEqual([e['event'] for e in forwarding], ['start', 'end'])
+        self.assertEqual(forwarding[-1]['outcome'], 'ok')
+
     def test_closed_baseline_requires_explicit_absence_not_attach_error_text(self):
         absent = {"status": "ok", "state": "STOPPED", "binary": CONFIG["executable"],
                   "profile": CONFIG["profile"], "version": CONFIG["version"],
@@ -153,6 +243,8 @@ class BrowserSessionTests(unittest.TestCase):
         threading.Thread(target=relay.serve_forever, daemon=True).start()
         try:
             endpoint = runtime.discover_transport(relay)
+            self.assertEqual(windows.calls, 1, 'acquisition connections must not rediscover all profiles')
+            self.assertEqual(windows.revalidations, 1)
             self.assertTrue(endpoint.endswith("/devtools/browser/current"))
             with socket.create_connection(relay.server_address, timeout=5) as connection:
                 connection.sendall(b"GET /devtools/browser/current HTTP/1.1\r\nUpgrade: websocket\r\n\r\n")
@@ -195,7 +287,7 @@ class BrowserSessionTests(unittest.TestCase):
 
     def test_discovery_change_during_setup_blocks(self):
         server = type("Server", (), {"server_address": ("127.0.0.1", 1), "record": record()})()
-        server.windows = type("Windows", (), {"config": CONFIG, "snapshot": lambda self: record(456, "fresh"), "startup_timeout": lambda self, default, phase: default})()
+        server.windows = type("Windows", (), {"config": CONFIG, "revalidate": lambda self, expected: record(456, "fresh"), "startup_timeout": lambda self, default, phase: default})()
         response = type("Response", (), {"status": 200, "read": lambda self: json.dumps(
             {"Browser": "Chrome/" + CONFIG["version"], "webSocketDebuggerUrl": record()["webSocketDebuggerUrl"]}).encode()})()
         with patch.object(runtime.http.client, "HTTPConnection") as connection:
@@ -203,11 +295,25 @@ class BrowserSessionTests(unittest.TestCase):
             with self.assertRaises(runtime.Blocked):
                 runtime.discover_transport(server)
 
+    def test_forwarded_browser_identity_mismatch_blocks_before_final_revalidation(self):
+        windows = type('Windows', (), {'config': CONFIG, 'startup_timeout': lambda self, default, phase: default})()
+        windows.revalidate = unittest.mock.Mock(return_value=record())
+        server = type('Server', (), {'server_address': ('127.0.0.1', 1), 'record': record(), 'windows': windows})()
+        for change in ({'Browser': 'Chrome/other'}, {'webSocketDebuggerUrl': 'ws://127.0.0.1:9317/devtools/browser/other'}):
+            body = {'Browser': 'Chrome/'+CONFIG['version'], 'webSocketDebuggerUrl': record()['webSocketDebuggerUrl']} | change
+            response = type('Response', (), {'status': 200, 'read': lambda self: json.dumps(body).encode()})()
+            with self.subTest(change=change), patch.object(runtime.http.client, 'HTTPConnection') as connection:
+                connection.return_value.getresponse.return_value = response
+                with self.assertRaisesRegex(runtime.Blocked, 'Browser discovery/process changed'):
+                    runtime.discover_transport(server)
+                connection.return_value.close.assert_called_once()
+        windows.revalidate.assert_not_called()
+
     def test_transport_uses_remaining_caller_budget_instead_of_hidden_fifteen_seconds(self):
         windows = object.__new__(runtime.Windows)
         windows.config = CONFIG
         windows.readiness_deadline = 120.0
-        windows.snapshot = lambda: record()
+        windows.revalidate = lambda expected: record()
         server = type("Server", (), {"server_address": ("127.0.0.1", 1), "record": record(), "windows": windows})()
         discovery = {"Browser": "Chrome/" + CONFIG["version"], "webSocketDebuggerUrl": record()["webSocketDebuggerUrl"]}
         response = type("Response", (), {"status": 200, "read": lambda self: json.dumps(discovery).encode()})()
@@ -245,6 +351,32 @@ class BrowserSessionTests(unittest.TestCase):
             with self.assertRaisesRegex(runtime.Blocked, "deadline exhausted before Windows runtime inspection"):
                 windows.snapshot()
             run.assert_not_called()
+
+    def test_targeted_revalidation_passes_established_identity_and_rejects_changes(self):
+        windows = object.__new__(runtime.Windows)
+        windows.config = CONFIG
+        windows.config_path, windows.powershell, windows.script = 'fixture', 'fixture', 'fixture'
+        windows.readiness_deadline = 120.0
+        with patch.object(runtime.time, 'monotonic', return_value=110.0), patch.object(runtime.subprocess, 'run',
+                return_value=subprocess.CompletedProcess([], 0, json.dumps(record()), '')) as run:
+            self.assertEqual(windows.revalidate(record()), record())
+            args = run.call_args.args[0]
+            self.assertEqual(args[args.index('-Operation')+1], 'revalidate')
+            self.assertEqual(args[args.index('-ExpectedProcessId')+1], '123')
+            self.assertEqual(args[args.index('-ExpectedWebSocket')+1], record()['webSocketDebuggerUrl'])
+            self.assertEqual(args[args.index('-ExpectedBinary')+1], CONFIG['executable'])
+            self.assertEqual(args[args.index('-ExpectedProfile')+1], CONFIG['profile'])
+            self.assertEqual(run.call_args.kwargs['timeout'], 10.0)
+        windows.readiness_deadline = None
+        changes = [dict(binary=r'C:\Other\browser.exe'), dict(profile=r'C:\Other\profile'), dict(version='other'),
+                   dict(process_id=456), dict(started_at='reused-pid'),
+                   dict(webSocketDebuggerUrl='ws://127.0.0.1:9317/devtools/browser/restarted'),
+                   dict(webSocketDebuggerUrl='ws://127.0.0.1:9320/devtools/browser/current')]
+        for change in changes:
+            with self.subTest(change=change), patch.object(runtime.subprocess, 'run',
+                    return_value=subprocess.CompletedProcess([], 0, json.dumps(record() | change), '')):
+                with self.assertRaises(runtime.Blocked):
+                    windows.revalidate(record())
 
     def test_cleanup_preserves_profile_site_extension_state(self):
         with tempfile.TemporaryDirectory() as directory:

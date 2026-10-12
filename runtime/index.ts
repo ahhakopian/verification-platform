@@ -1,7 +1,8 @@
 export * from './fixtures.js';
 export * from './cdp/index.js';
 export * from './host/wsl-windows/session.js';
-export * from './host/wsl-windows/native.js';
+export {nativeOperation} from './host/wsl-windows/native.js';
+export type {NativeCriteria,NativeOperationInput,NativeMenuAssociation,NativeMenuRequest,NativeOperationObservation} from './host/wsl-windows/native.js';
 export * from './evidence/reconcile.js';
 export * from './evidence/records.js';
 export * from './readiness.js';

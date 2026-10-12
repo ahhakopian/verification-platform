@@ -2,6 +2,17 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';import {readFileSync,writeFileSync,mkdtempSync} from 'node:fs';import {tmpdir} from 'node:os';import {join,resolve} from 'node:path';
 import {plan,assignment,identity,manifest,evidence} from '../tests/fixtures/execution.mjs';
 import {sourceDigest} from '../dist/src/validation/result.js';
+import {installedHookSelfCheck} from '../dist/runtime/invoke.js';
+import {sha256} from '../dist/src/resources/resolve.js';
+test('installed indexed hook loading execution and evidence machinery',async()=>{
+ const bytes=readFileSync('resource-index.json'),index=JSON.parse(bytes);
+ const binding={schemaVersion:1,repository:index.repository,tag:index.tag,sourceCommit:index.sourceCommit,index:{asset:'resource-index.json',sha256:sha256(bytes)},resources:{integration:'contracts/verification-integration.md',planSchema:'schemas/browser-verification-plan.schema.json',descriptors:'contracts/generic-descriptors.json'}};
+ const parent=mkdtempSync(join(tmpdir(),'verification-installed-hook-'));
+ const outputRoot=process.env.VERIFICATION_SELF_CHECK_ROOT??join(parent,'attempt');
+ const report=await installedHookSelfCheck(binding,{root:process.cwd(),indexPath:'resource-index.json',mode:'execution'},outputRoot,process.env.VERIFICATION_EXECUTION_ID,Number(process.env.VERIFICATION_ATTEMPT??1));
+ assert.equal(report.outcome,'PASS');assert.equal(report.synthetic,true);
+ process.stdout.write(JSON.stringify({selfCheckReport:join(outputRoot,'self-check.json'),executionId:report.identity.executionId,attempt:report.identity.attempt})+'\n');
+});
 test('ordinary pinned runner annotations evidence attachments reporter compatibility',()=>{
  const directory=mkdtempSync(join(tmpdir(),'verification-ordinary-'));
  const current=structuredClone(identity);const mapped=structuredClone(manifest);

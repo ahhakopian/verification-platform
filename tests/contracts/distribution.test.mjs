@@ -15,7 +15,10 @@ test('reproducible coherent distribution relocates independently, offline identi
  assert.deepEqual((await import(pathToFileURL(join(relocated,pkg.exports['./runtime'])).href)).descriptors,JSON.parse(readFileSync(join(relocated,'contracts/generic-descriptors.json'))).providers);
  assert.equal(verify(relocated,{binding}).resolved.resources.size,index.resources.length);
  // Published installation and AI guidance must retain the canonical adoption contract.
- for(const [published,source] of [['distribution/README.md','distribution/README.md'],['contracts/verification-integration.md','contracts/verification-integration.md'],['dist/frontends/verification-orchestrator/SKILL.md','frontends/verification-orchestrator/SKILL.md']])assert.equal(readFileSync(join(relocated,published),'utf8'),readFileSync(resolve(source),'utf8'));
+ for(const [published,source] of [['distribution/README.md','distribution/README.md'],['contracts/verification-integration.md','contracts/verification-integration.md'],['contracts/contracts.md','contracts/contracts.md'],['dist/frontends/verification-orchestrator/assets/installation-adoption.md','frontends/verification-orchestrator/assets/installation-adoption.md'],['dist/frontends/verification-orchestrator/SKILL.md','frontends/verification-orchestrator/SKILL.md']])assert.equal(readFileSync(join(relocated,published),'utf8'),readFileSync(resolve(source),'utf8'));
+ assert(index.resources.find(r=>r.id==='contracts/verification-integration.md').dependencies.includes('contracts/contracts.md'));
+ assert.match(readFileSync(join(relocated,'contracts/contracts.md'),'utf8'), /### ProjectPreflightHook consumer authoring contract/);
+ assert.match(readFileSync(join(relocated,'dist/frontends/verification-orchestrator/assets/installation-adoption.md'),'utf8'), /Before authoring or updating a consumer hook, read `<distribution>\/contracts\/contracts\.md`/);
  assert(statSync(join(relocated,'dist/runtime/host/wsl-windows/native-ui')).mode&0o111);
  for(const r of index.resources){const content=readFileSync(join(relocated,r.path),'utf8');assert(!content.includes('/home/art/'),r.path);assert(!r.path.includes('slice4-live'));assert(!r.path.includes('import-provenance'));}
  assert(readFileSync(join(relocated,'dist/frontends/browser-verification/SKILL.md'),'utf8').includes('<distribution>/dist/runtime/cdp/extension-action.cjs'));
@@ -37,4 +40,22 @@ test('reproducible coherent distribution relocates independently, offline identi
  assert.deepEqual(readFileSync(join(temporary,'asset-a.resource-index.json')),bytes);
  assert.equal(sha256(readFileSync(join(temporary,'asset-a.tar.gz'))),sha256(readFileSync(join(temporary,'asset-b.tar.gz'))));
  const unpack=join(temporary,'unpacked');mkdirSync(unpack);run=spawnSync('tar',['-xzf',join(temporary,'asset-a.tar.gz'),'-C',unpack]);assert.equal(run.status,0);verify(unpack,{binding});assert(!readdirSync(unpack).includes('node_modules'));
+});
+
+test('installation handoff ships generic readiness exports and instructions without generated consumer integration',async()=>{
+ const root=join(mkdtempSync(join(tmpdir(),'adoption-package-')),'platform');
+ assemble(identity,root,{fixtureOnly:true});
+ const index=JSON.parse(readFileSync(join(root,'resource-index.json')));
+ cpSync(resolve('node_modules'),join(root,'node_modules'),{recursive:true,dereference:true});
+ const invocation=await import(pathToFileURL(join(root,'dist/runtime/invoke.js')).href);
+ for(const name of ['invokeReadiness','recordReadinessConfiguration','reserveAdoptionCorrection'])assert.equal(typeof invocation[name],'function');
+ assert.equal(invocation.composeReadinessConfig,undefined);
+ for(const path of ['distribution/README.md','contracts/verification-integration.md','dist/frontends/verification-orchestrator/SKILL.md','dist/frontends/verification-orchestrator/assets/installation-adoption.md']){
+  const text=readFileSync(join(root,path),'utf8');
+  assert.match(text,/every install, upgrade and recovery, freshly regenerate/);
+  assert.match(text,/Platform defines WHAT consumer integration must satisfy; the AI installer determines HOW/);
+ }
+ assert(index.resources.some(r=>r.path==='dist/runtime/adoption-readiness.js'));
+ assert(index.resources.every(r=>!r.path.startsWith('.verification/integration/')));
+ assert.match(readFileSync(join(root,'dist/frontends/verification-orchestrator/assets/installation-adoption.md'),'utf8'),/node <runnerEntry> <request.json>/);
 });
