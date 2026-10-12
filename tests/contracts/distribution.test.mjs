@@ -47,9 +47,13 @@ test('installation handoff ships generic readiness exports and instructions with
  assemble(identity,root,{fixtureOnly:true});
  const index=JSON.parse(readFileSync(join(root,'resource-index.json')));
  cpSync(resolve('node_modules'),join(root,'node_modules'),{recursive:true,dereference:true});
- const invocation=await import(pathToFileURL(join(root,'dist/runtime/invoke.js')).href);
+ // Each independent installation owns a Playwright singleton. Load this
+ // distribution in its own process rather than a second copy in this test host.
+ const check=spawnSync(process.execPath,['--input-type=module','-e',`import assert from 'node:assert/strict';
+ const invocation=await import(${JSON.stringify(pathToFileURL(join(root,'dist/runtime/invoke.js')).href)});
  for(const name of ['invokeReadiness','recordReadinessConfiguration','reserveAdoptionCorrection'])assert.equal(typeof invocation[name],'function');
- assert.equal(invocation.composeReadinessConfig,undefined);
+ assert.equal(invocation.composeReadinessConfig,undefined);`],{cwd:root,encoding:'utf8',timeout:30000});
+ assert.equal(check.status,0,check.stdout+check.stderr+String(check.error));
  for(const path of ['distribution/README.md','contracts/verification-integration.md','dist/frontends/verification-orchestrator/SKILL.md','dist/frontends/verification-orchestrator/assets/installation-adoption.md']){
   const text=readFileSync(join(root,path),'utf8');
   assert.match(text,/every install, upgrade and recovery, freshly regenerate/);

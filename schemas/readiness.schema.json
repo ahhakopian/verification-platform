@@ -10,6 +10,10 @@
       "type": "string",
       "minLength": 1
     },
+    "capabilityVersion": {
+      "type": "string",
+      "minLength": 1
+    },
     "environmentId": {
       "type": "string",
       "minLength": 1

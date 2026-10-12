@@ -1,6 +1,14 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync,existsSync} from 'node:fs';
 import * as runtime from '../../dist/runtime/index.js';import {validateSchema} from '../../dist/src/validation/schema.js';
 import {discoverProviders} from '../../dist/src/compilation/bundle.js';
+test('readiness helper emits actual descriptor contract versions in the compatible existing schema',()=>{
+ const provider=structuredClone(runtime.descriptors[0]);provider.capabilities[0].contractVersion='2';provider.capabilities[0].evidenceRefs=['synthetic'];
+ const records=runtime.capabilityReadiness(provider,'synthetic-environment',{available:true,reason:'Synthetic version-scoped prerequisites',evidenceRefs:['synthetic']});
+ for(const [i,record] of records.entries()){assert.equal(record.capabilityVersion,provider.capabilities[i].contractVersion);assert.deepEqual(validateSchema('readiness',record),[]);}
+ assert.deepEqual(records[0].evidenceRefs,['synthetic']);
+ const legacy={...records[0]};delete legacy.capabilityVersion;assert.deepEqual(validateSchema('readiness',legacy),[]);
+ assert(validateSchema('readiness',{...records[0],capabilityVersion:''}).length>0);
+});
 test('actual exported generic catalog is the exact indexed normative JSON with honest implemented entries',()=>{const indexed=JSON.parse(readFileSync('contracts/generic-descriptors.json','utf8'));assert.deepEqual(runtime.descriptors,indexed.providers);assert.deepEqual(validateSchema('descriptor-set',indexed),[]);for(const provider of runtime.descriptors)for(const cap of provider.capabilities){assert.equal(typeof runtime[cap.export],'function',cap.id);assert(['unestablished','established','unavailable'].includes(cap.support));if(cap.support==='established')assert(cap.evidenceRefs.length>0);for(const ref of cap.evidenceRefs)assert(existsSync(ref.split('#')[0]),'Evidence documentation exists: '+ref);}assert(runtime.descriptors.flatMap(p=>p.capabilities).some(c=>c.export==='nativeOperation'));assert(runtime.unavailableCapabilities.some(c=>c.capabilityId==='chrome:worker-interruption'));});
 test('real shared runtime descriptor collection discovers exactly configured generic provider',async()=>{const p=runtime.descriptors.find(p=>p.id==='generic:chrome');const discovered=await discoverProviders({assignment:{providers:[{id:p.id,version:p.version,entry:p.entry}]}},process.cwd());assert.deepEqual(discovered.diagnostics,[]);assert.equal(discovered.providers.length,1);assert.deepEqual(discovered.providers[0],p);});
 

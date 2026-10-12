@@ -9,8 +9,9 @@ export function validateCoverage(plan:Plan,assignment:Assignment,manifest:Manife
  for(const entry of manifest.entries){const key=JSON.stringify([entry.claimId,entry.environmentId]);const expected=required.get(key);if(!expected||mapped.has(key)){errors.push('Unknown/duplicate coverage pair '+key);continue;}mapped.add(key);
   const proofIds=expected.claim.proof.filter(p=>p.mandatory).map(p=>p.id);
   const capabilities=expected.claim.proof.filter(p=>p.mandatory&&p.capabilityId).map(p=>({id:p.capabilityId!,version:p.capabilityVersion!}));
-  if(JSON.stringify([...entry.capabilityIds].sort())!==JSON.stringify([...new Set(capabilities.map(c=>c.id))].sort()))errors.push('Mandatory capability mapping differs '+key);
+  if(capabilities.some(c=>!entry.capabilityIds.includes(c.id)))errors.push('Mandatory capability mapping differs '+key);
   for(const capability of capabilities)if(entry.capabilityVersions[capability.id]!==capability.version)errors.push('Capability contract version differs '+key);
+  for(const id of entry.capabilityIds)if(!entry.capabilityVersions[id])errors.push('Capability contract version missing '+key+'/'+id);
   if(JSON.stringify([...entry.proofIds].sort())!==JSON.stringify(proofIds.sort()))errors.push('Mandatory proof mapping differs '+key);
   if(JSON.stringify([...entry.sourceRefs].sort())!==JSON.stringify([...expected.claim.sourceRefs].sort())||entry.mode!==expected.claim.mode)errors.push('Normative source/mode mapping differs '+key);
   if(!entry.blocker&&(!entry.testKey||!entry.source||!entry.title||!entry.assertions.length))errors.push('Runnable mapping incomplete '+key);

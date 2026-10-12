@@ -33,12 +33,12 @@ export async function discoverProviders(invocation:Invocation,cwd:string):Promis
 }
 export async function validateBundle(input:{invocation:Invocation;resolution:ResolutionConfig;manifest:Manifest;cwd:string;files:string[];tsconfig:string;typescriptEntry:string;readiness:Readiness[]}) {
  const {invocation,manifest}=input;const diagnostics:string[]=[];
- if(validateSchema('invocation',invocation).length||validateSchema('coverage-manifest',manifest).length)return {valid:false,diagnostics:['Invalid invocation/manifest format']};
+ if(validateSchema('invocation',invocation).length||validateSchema('coverage-manifest',manifest).length)return {valid:false,fullyReconciled:false,diagnostics:['Invalid invocation/manifest format']};
  const bytes=readFileSync(resolve(input.cwd,invocation.planPath),'utf8');
  const validation=validatePlan({planBytes:bytes,binding:invocation.binding,resolution:{...input.resolution,mode:'execution'},projectRoot:input.cwd,assignment:invocation.assignment});
  if(!validation.valid)diagnostics.push(...validation.diagnostics.map(d=>d.path+': '+d.message));
  if(validation.planDigest!==invocation.planDigest)diagnostics.push('Invocation plan digest mismatch');
- if(diagnostics.length)return {valid:false,diagnostics,validation};
+ if(diagnostics.length)return {valid:false,fullyReconciled:false,diagnostics,validation};
  const plan=JSON.parse(bytes);diagnostics.push(...validateCoverage(plan,invocation.assignment,manifest));
  if(manifest.identity.assignmentDigest!==sha256(JSON.stringify(invocation.assignment)))diagnostics.push('Assignment digest mismatch');
  const source=input.files.map(path=>({path,bytes:readFileSync(resolve(input.cwd,path),'utf8')}));
@@ -46,11 +46,14 @@ export async function validateBundle(input:{invocation:Invocation;resolution:Res
  const discovered=await discoverProviders(invocation,input.cwd);diagnostics.push(...discovered.diagnostics);
  if(JSON.stringify(discovered.sources)!==JSON.stringify(manifest.identity.providerSources))diagnostics.push('Provider source/declaration identity mismatch');
  try{if(manifest.identity.fixtureDigest!==sha256(readFileSync(resolve(input.cwd,invocation.assignment.fixtureEntry))))diagnostics.push('Fixture entry identity mismatch');}catch(error){diagnostics.push('Configured fixture entry unavailable');}
- const available=new Set(discovered.providers.flatMap(p=>p.capabilities.filter(c=>c.support==='established').map(c=>c.id)));
+ const readiness=input.readiness.filter(r=>!validateSchema('readiness',r).length);
  for(const entry of manifest.entries)if(!entry.blocker){
   if(!input.files.includes(entry.source!))diagnostics.push('Mapped source not in bundle: '+entry.source);
-  for(const id of entry.capabilityIds)if(!available.has(id)||!input.readiness.some(r=>r.capabilityId===id&&r.environmentId===entry.environmentId&&r.status==='available'&&r.evidenceRefs.length))diagnostics.push('Unavailable capability: '+id);
-  for(const id of entry.capabilityIds)if(!discovered.providers.some(p=>p.capabilities.some(c=>c.id===id&&c.contractVersion===entry.capabilityVersions[id])))diagnostics.push('Capability contract mismatch: '+id);
+  for(const id of entry.capabilityIds){
+   const version=entry.capabilityVersions[id];
+   if(!discovered.providers.some(p=>p.capabilities.some(c=>c.id===id&&c.contractVersion===version&&c.support==='established')))diagnostics.push('Capability contract unavailable: '+id+'@'+version+' for '+entry.claimId+'/'+entry.environmentId);
+   if(!readiness.some(r=>r.capabilityId===id&&r.capabilityVersion===version&&r.environmentId===entry.environmentId&&r.status==='available'&&r.evidenceRefs.length))diagnostics.push('Unavailable capability readiness: '+id+'@'+version+' for '+entry.claimId+'/'+entry.environmentId);
+  }
   for(const provider of discovered.providers)for(const capability of provider.capabilities.filter(c=>entry.capabilityIds.includes(c.id)))if(capability.effects.some(effect=>!invocation.assignment.authorization.allowedEffects.includes(effect)))diagnostics.push('Assigned authorization does not permit capability effects: '+capability.id);
   const claim=plan.claims.find((c:any)=>c.id===entry.claimId);
   for(const provider of discovered.providers)for(const capability of provider.capabilities.filter(c=>entry.capabilityIds.includes(c.id)))if(capability.effects.some(effect=>!claim.allowedEffects.includes(effect)))diagnostics.push('Normative claim does not permit capability effects: '+entry.claimId+'/'+capability.id);
@@ -67,5 +70,7 @@ export async function validateBundle(input:{invocation:Invocation;resolution:Res
   if(!s.bytes.includes('testKey'))diagnostics.push('Missing testKey annotation: '+s.path);
  }
  if(!diagnostics.length&&input.files.length){try{const typecheck=await boundedProcess(process.execPath,[input.typescriptEntry,'--project',input.tsconfig,'--noEmit'],30000);if(typecheck.exitCode!==0||typecheck.timedOut)diagnostics.push('Typecheck blocked: '+typecheck.stdout+typecheck.stderr);}catch(error){diagnostics.push('Typecheck invocation blocked: '+String(error));}}
- return {valid:!diagnostics.length,diagnostics,validation};
+ const valid=diagnostics.length===0;
+ // This proves declared mappings only; decomposition completeness remains AI review.
+ return {valid,fullyReconciled:valid&&manifest.entries.every(entry=>entry.blocker===undefined),diagnostics,validation};
 }
